@@ -37,3 +37,24 @@ Two groups, working side by side:
 ## Repository structure
 
 Each team should add their work under `/projects/` with a short, descriptive folder name:
+projects/
+team-name-or-project-slug/
+README.md       # what it does, who built it, how to run it
+src/            # source code
+docs/           # supporting docs, diagrams, slides
+data/           # only public, non-sensitive sample data
+
+Please do **not** commit private health data, identifiable data, or API credentials. Use `.env` files locally and keep them out of the repo (see `.gitignore`).
+
+## License
+
+All code and materials added to this repository during EpiHack Arizona are released under the **Creative Commons Attribution–NonCommercial 4.0 International License (CC BY-NC 4.0)**.
+
+You are free to share and adapt the work, as long as you give appropriate credit and do not use the material for commercial purposes. See [LICENSE](./LICENSE) for the full text, or the human-readable summary at https://creativecommons.org/licenses/by-nc/4.0/.
+
+> Note for contributors: CC BY-NC is more common for creative works than for software. The choice here reflects the spirit of EpiHack — outputs are meant to serve communities and public health, not to be commercialized. If a team wants to extend a prototype after the event under a different license, please open an issue first so we can discuss.
+
+## Contact
+
+Event info: https://endingpandemicsacademy.arizona.edu/trainings-events/epihack-arizona  
+For repository questions, open an issue.
