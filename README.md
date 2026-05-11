@@ -46,6 +46,92 @@ data/           # only public, non-sensitive sample data
 
 Please do **not** commit private health data, identifiable data, or API credentials. Use `.env` files locally and keep them out of the repo (see `.gitignore`).
 
+## How to contribute
+
+The repo is public, so **you do not need an invitation**. Anyone with a GitHub account can contribute by forking the repo and opening a Pull Request. If you are new to this flow, the steps below walk through it from start to finish.
+
+### One-time setup
+
+1. Create a GitHub account if you do not have one: https://github.com/signup
+2. Install Git on your machine: https://git-scm.com/downloads
+3. Tell Git who you are (only needed once per machine):
+```bash
+   git config --global user.name "Your Name"
+   git config --global user.email "you@example.com"
+```
+
+### The flow, step by step
+
+**1. Fork the repo.**  
+Go to https://github.com/Ending-Pandemics/Epihack and click the **Fork** button (top right). This creates your own copy of the repo under your account.
+
+**2. Clone your fork to your machine.**  
+Replace `YOUR-USERNAME` with your GitHub username:
+```bash
+git clone https://github.com/YOUR-USERNAME/Epihack.git
+cd Epihack
+```
+
+**3. Create a folder for your team's project.**  
+Pick a short, descriptive slug. No spaces, lowercase, hyphens are fine:
+```bash
+mkdir -p projects/your-team-slug
+cd projects/your-team-slug
+```
+
+Add at least a `README.md` describing what your project does, who is on the team, and how to run it.
+
+**4. Create a branch for your work.**  
+Do not work directly on `main`. Branch names should be short and descriptive:
+```bash
+git checkout -b add-your-team-slug
+```
+
+**5. Commit as you go.**  
+Small, frequent commits are better than one giant one:
+```bash
+git add .
+git commit -m "Initial project scaffold for your-team-slug"
+```
+
+**6. Push your branch to your fork.**
+```bash
+git push origin add-your-team-slug
+```
+
+**7. Open a Pull Request.**  
+Go to your fork on GitHub. You will see a banner asking if you want to open a Pull Request — click it. Set the base repo to `Ending-Pandemics/Epihack`, base branch to `main`, and your branch as the source. Write a short description: team name, what the project does, what stage it is in. Submit.
+
+Organizers will review and merge your PR. You can keep pushing more commits to the same branch and they will appear in the same PR automatically — no need to open a new one.
+
+### Keeping your fork up to date
+
+If the main repo gets updated during the week (for example, organizers add a new template), sync your fork:
+```bash
+git remote add upstream https://github.com/Ending-Pandemics/Epihack.git
+git fetch upstream
+git checkout main
+git merge upstream/main
+git push origin main
+```
+
+### Important rules
+
+- **Do not commit secrets.** No API keys, passwords, tokens, private health data, or identifiable information. Use `.env` files locally and rely on the `.gitignore` to keep them out.
+- **Stay inside your team's folder.** Do not modify other teams' projects or files at the root unless you are coordinating with organizers.
+- **Use clear commit messages.** "Fix bug" is not helpful. "Fix date parsing in symptom report form" is.
+- **Open one PR per team**, not one per person. Add teammates as co-authors on commits if you want individual recognition: https://docs.github.com/en/pull-requests/committing-changes-to-your-project/creating-and-editing-commits/creating-a-commit-with-multiple-authors
+
+### Getting unstuck
+
+- Confused by Git? GitHub's own intro is good: https://docs.github.com/en/get-started/quickstart
+- Stuck on a merge conflict? Ask in `#tech-help` on the EpiHack Discord — someone will help.
+- Something broken at the repo level? Open an issue here, or ping an organizer on Discord.
+
+### Final deadline
+
+All Pull Requests should be opened by **Friday May 22, 12:00 PM (Tucson time)**. After that point, organizers will merge what is ready and freeze the repo for demo day.
+
 ## License
 
 All code and materials added to this repository during EpiHack Arizona are released under the **Creative Commons Attribution–NonCommercial 4.0 International License (CC BY-NC 4.0)**.
