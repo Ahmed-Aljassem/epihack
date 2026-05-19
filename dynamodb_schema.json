@@ -1,5 +1,8 @@
 {
     event_id: UUID,
+    lat: FLOAT,
+    long: FLOAT,
+    timestamp: ISO8601_STRING,
     report:[
         {
             type: human,
