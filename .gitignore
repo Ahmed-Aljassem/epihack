@@ -30,14 +30,57 @@ __pycache__/
 .venv/
 venv/
 env/
+.env.venv
 
 # Build outputs
 dist/
 build/
 out/
 *.egg-info/
+*.whl
+
+# Frontend (Node.js / Vite / React)
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/coverage/
+frontend/.nyc_output/
+frontend/yarn.lock
+frontend/package-lock.json
+frontend/pnpm-lock.yaml
+
+# Backend (Python / FastAPI)
+backend/__pycache__/
+backend/*.pyc
+backend/.pytest_cache/
+backend/.mypy_cache/
+backend/.coverage
+backend/htmlcov/
+backend/*.db
+backend/*.sqlite
+backend/*.sqlite3
+backend/dist/
+backend/build/
+
+# Testing & Coverage
+.coverage
+.pytest_cache/
+htmlcov/
+coverage.xml
+*.cover
+.hypothesis/
+
+# IDE & Editor caches
+*.sublime-workspace
+*.sublime-project
+.LSP/
+.DS_Store/
 
 # Sensitive / large data — protect by default
 data/raw/
 data/private/
 *.csv.bak
+uploads/
+temp/
+
+
