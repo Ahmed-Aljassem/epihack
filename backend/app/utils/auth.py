@@ -1,59 +1,71 @@
-from datetime import datetime, timedelta, timezone
-from typing import Any
-from jose import jwt, JWTError
-from passlib.context import CryptContext
+import httpx
+from jose import jwt as jose_jwt, JWTError
+from jose.jwk import construct as jwk_construct
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from app.config import get_settings
-from app.utils.dynamo import DynamoDBClient
 
 settings = get_settings()
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
-
-_users_client = DynamoDBClient(settings.DYNAMO_USERS_TABLE)
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
 
 
-def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+class _CognitoValidator:
+    """
+    Validates Cognito id_tokens using the pool's public JWKS keys (RS256).
+    Keys are fetched lazily on first use and refreshed on cache miss
+    to handle Cognito key rotation transparently.
+    """
+
+    def __init__(self):
+        self._jwks_url = f"{settings.COGNITO_AUTHORITY}/.well-known/jwks.json"
+        self._issuer = settings.COGNITO_AUTHORITY
+        self._audience = settings.COGNITO_CLIENT_ID
+        self._keys: dict[str, dict] = {}
+
+    def _load_keys(self) -> None:
+        resp = httpx.get(self._jwks_url, timeout=10)
+        resp.raise_for_status()
+        self._keys = {k["kid"]: k for k in resp.json()["keys"]}
+
+    def decode(self, token: str) -> dict:
+        kid = jose_jwt.get_unverified_headers(token).get("kid", "")
+        if kid not in self._keys:
+            self._load_keys()           # refresh once on cache miss / key rotation
+        if kid not in self._keys:
+            raise JWTError("Unknown signing key")
+        return jose_jwt.decode(
+            token,
+            jwk_construct(self._keys[kid]),
+            algorithms=["RS256"],
+            audience=self._audience,
+            issuer=self._issuer,
+        )
 
 
-def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
-
-
-def create_access_token(data: dict[str, Any]) -> str:
-    payload = data.copy()
-    expire = datetime.now(timezone.utc) + timedelta(
-        minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
-    )
-    payload.update({"exp": expire})
-    return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+_validator = _CognitoValidator()
 
 
 async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
-    credentials_exc = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
+    """Validate a Cognito id_token and return its claims as the current user."""
     try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        user_id: str = payload.get("sub")
-        if not user_id:
-            raise credentials_exc
+        return _validator.decode(token)
     except JWTError:
-        raise credentials_exc
-
-    user = _users_client.get_item({"user_id": user_id})
-    if not user:
-        raise credentials_exc
-    return user
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
 
 def require_role(*roles: str):
+    """
+    Dependency: raises 403 if the user's Cognito groups don't include
+    at least one of the required roles.
+    Configure roles by adding users to matching groups in the Cognito User Pool.
+    """
     async def checker(current_user: dict = Depends(get_current_user)):
-        if current_user["role"] not in roles:
+        user_groups: list[str] = current_user.get("cognito:groups", [])
+        if not any(r in user_groups for r in roles):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Access restricted to roles: {', '.join(roles)}",

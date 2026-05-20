@@ -77,6 +77,6 @@ async def update_alert_status(
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
     if new_status in (AlertStatus.RESOLVED, AlertStatus.FALSE_POSITIVE):
-        updates["resolved_by"] = current_user["user_id"]
+        updates["resolved_by"] = current_user["sub"]
     _alerts.update_item({"alert_id": alert_id}, updates)
     return {"message": f"Alert status updated to {new_status}"}

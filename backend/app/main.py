@@ -2,7 +2,6 @@ from uuid import uuid4
 from decimal import Decimal
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.middleware.sessions import SessionMiddleware
 from app.config import get_settings
 from app.utils import dynamo
 from app.routers import surveys, responses, alerts, dashboard
@@ -31,8 +30,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.add_middleware(SessionMiddleware, secret_key=settings.SECRET_KEY)
-
 # ── Routers ──────────────────────────────────────────────────────
 app.include_router(cognito_router)
 app.include_router(surveys.router)

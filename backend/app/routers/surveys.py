@@ -44,7 +44,7 @@ async def create_survey(
         "survey_id": str(uuid4()),
         "status": SurveyStatus.ACTIVE,
         "response_count": 0,
-        "created_by": current_user["user_id"],
+        "created_by": current_user["sub"],
         "created_at": now,
         "updated_at": now,
     }
