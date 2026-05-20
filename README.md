@@ -6,61 +6,10 @@ automated anomaly detection to flag potential epidemic or pandemic signals.
 
 ---
 
-## Architecture
-
-```
-epidemic-radar/
-├── backend/                  FastAPI REST API
-│   └── app/
-│       ├── main.py           Lifespan, CORS, router wiring
-│       ├── config.py         Pydantic settings
-│       ├── database.py       Motor async MongoDB client
-│       ├── models/           Domain enums
-│       ├── schemas/          Pydantic request/response schemas
-│       ├── routers/          auth · surveys · responses · alerts · dashboard
-│       ├── services/         anomaly_detector.py (APScheduler job)
-│       └── utils/            JWT auth helpers
-│
-├── frontend/                 React + Vite SPA
-│   └── src/
-│       ├── App.jsx           Router + protected routes
-│       ├── context/          AuthContext (JWT session)
-│       ├── hooks/            useFetch, useMutation, domain hooks
-│       ├── services/         axios API client with interceptors
-│       ├── pages/            Dashboard · Surveys · Alerts · My Responses
-│       └── components/       AppLayout + design system CSS
-│
-├── infra/
-│   └── mongo-init.js         DB & index initialization
-│
-└── docker-compose.yml        Full stack orchestration
-```
-
----
-
-## Quick Start
-
-### Option A — Docker (recommended)
-
-```bash
-cp backend/.env.example backend/.env
-docker-compose up --build
-```
-
-| Service   | URL                          |
-|-----------|------------------------------|
-| Frontend  | http://localhost:5173        |
-| API docs  | http://localhost:8000/docs   |
-| MongoDB   | localhost:27017              |
-
-### Option B — Local development
-
 **Backend**
 ```bash
 cd backend
-python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env  # configure MONGODB_URL
 uvicorn app.main:app --reload
 ```
 
@@ -68,13 +17,23 @@ uvicorn app.main:app --reload
 ```bash
 cd frontend
 npm install
-cp .env.example .env
 npm run dev
 ```
 
 ---
 
 ## API Overview
+
+Details to be added for below:
+
+### Authentication
+
+Using AWS Cognito
+
+### Database
+
+Using AWS DynamoDB
+
 
 | Method | Endpoint                        | Description                   |
 |--------|---------------------------------|-------------------------------|
