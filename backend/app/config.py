@@ -1,5 +1,9 @@
-from pydantic_settings import BaseSettings
+from pathlib import Path
 from functools import lru_cache
+from pydantic_settings import BaseSettings
+
+# Absolute path to .env in the project root, regardless of working directory
+_ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
 
 
 class Settings(BaseSettings):
@@ -9,9 +13,16 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
 
+    # AWS credentials (shared by DynamoDB and S3)
+    DYNAMO_ACCESS_KEY_ID: str = ""
+    DYNAMO_SECRET_ACCESS_KEY: str = ""
+    DYNAMO_REGION: str = "us-east-2"
+
     # DynamoDB tables
-    DYNAMO_USERS_TABLE: str = "epihack_users"
     DYNAMO_SURVEYS_TABLE: str = "epihack_surveys"
+    DYNAMO_REPORTS_TABLE: str = "epihack_reports"
+    
+    # To be implemented
     DYNAMO_RESPONSES_TABLE: str = "epihack_responses"
     DYNAMO_ALERTS_TABLE: str = "epihack_alerts"
 
@@ -40,7 +51,7 @@ class Settings(BaseSettings):
         return [o.strip() for o in self.CORS_ORIGINS.split(",")]
 
     class Config:
-        env_file = ".env"
+        env_file = str(_ENV_FILE)
         case_sensitive = True
 
 

@@ -3,7 +3,12 @@ from fastapi import UploadFile
 from app.config import get_settings
 
 settings = get_settings()
-_s3 = boto3.client("s3")
+_s3 = boto3.client(
+    "s3",
+    region_name=settings.DYNAMO_REGION,
+    aws_access_key_id=settings.DYNAMO_ACCESS_KEY_ID,
+    aws_secret_access_key=settings.DYNAMO_SECRET_ACCESS_KEY,
+)
 
 
 async def upload_report_image(report_id: str, subtype: str, file: UploadFile) -> str:

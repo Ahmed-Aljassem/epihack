@@ -5,11 +5,11 @@ from app.config import get_settings
 from app.schemas.schemas import SurveyCreate, SurveyOut
 from app.models.enums import SurveyStatus, SurveyCategory, UserRole
 from app.utils.auth import get_current_user, require_role
-from app.utils.dynamo import DynamoDBClient
+from app.utils.dynamo import client as db
 
 settings = get_settings()
 router = APIRouter(prefix="/api/surveys", tags=["Surveys"])
-_surveys = DynamoDBClient(settings.DYNAMO_SURVEYS_TABLE)
+TABLE = settings.DYNAMO_SURVEYS_TABLE
 
 EDITOR_ROLES = (UserRole.EPIDEMIOLOGIST, UserRole.HEALTH_WORKER, UserRole.ADMIN)
 
@@ -28,7 +28,7 @@ async def list_surveys(
     filters: dict = {"status": status}
     if category:
         filters["category"] = category
-    docs = _surveys.scan(filters)
+    docs = db.scan(TABLE, filters)
     docs.sort(key=lambda d: d.get("created_at", ""), reverse=True)
     return [_to_out(d) for d in docs[skip : skip + limit]]
 
@@ -48,13 +48,13 @@ async def create_survey(
         "created_at": now,
         "updated_at": now,
     }
-    _surveys.put_item(doc)
+    db.put_item(TABLE, doc)
     return _to_out(doc)
 
 
 @router.get("/{survey_id}", response_model=SurveyOut)
 async def get_survey(survey_id: str):
-    doc = _surveys.get_item({"survey_id": survey_id})
+    doc = db.get_item(TABLE, {"survey_id": survey_id})
     if not doc:
         raise HTTPException(status_code=404, detail="Survey not found")
     return _to_out(doc)
@@ -66,9 +66,10 @@ async def update_status(
     new_status: SurveyStatus,
     current_user: dict = Depends(require_role(*EDITOR_ROLES)),
 ):
-    if not _surveys.get_item({"survey_id": survey_id}):
+    if not db.get_item(TABLE, {"survey_id": survey_id}):
         raise HTTPException(status_code=404, detail="Survey not found")
-    _surveys.update_item(
+    db.update_item(
+        TABLE,
         {"survey_id": survey_id},
         {"status": new_status, "updated_at": datetime.now(timezone.utc).isoformat()},
     )
@@ -80,4 +81,4 @@ async def delete_survey(
     survey_id: str,
     current_user: dict = Depends(require_role(UserRole.ADMIN)),
 ):
-    _surveys.delete_item({"survey_id": survey_id})
+    db.delete_item(TABLE, {"survey_id": survey_id})

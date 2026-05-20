@@ -1,6 +1,7 @@
 from decimal import Decimal
 import boto3
 from boto3.dynamodb.conditions import Attr
+from app.config import get_settings
 
 
 def _serialize(obj):
@@ -26,19 +27,32 @@ def _deserialize(obj):
 
 
 class DynamoDBClient:
-    def __init__(self, table_name: str):
-        self.dynamodb = boto3.resource("dynamodb")
-        self.table = self.dynamodb.Table(table_name)
+    """Single boto3 resource shared across all tables. Pass table_name per call."""
 
-    def put_item(self, item: dict) -> None:
-        self.table.put_item(Item=_serialize(item))
+    def __init__(self):
+        settings = get_settings()
+        self._resource = boto3.resource(
+            "dynamodb",
+            region_name=settings.DYNAMO_REGION,
+            aws_access_key_id=settings.DYNAMO_ACCESS_KEY_ID,
+            aws_secret_access_key=settings.DYNAMO_SECRET_ACCESS_KEY,
+        )
+        self._tables: dict[str, object] = {}
 
-    def get_item(self, key: dict) -> dict | None:
-        response = self.table.get_item(Key=key)
+    def _table(self, table_name: str):
+        if table_name not in self._tables:
+            self._tables[table_name] = self._resource.Table(table_name)
+        return self._tables[table_name]
+
+    def put_item(self, table_name: str, item: dict) -> None:
+        self._table(table_name).put_item(Item=_serialize(item))
+
+    def get_item(self, table_name: str, key: dict) -> dict | None:
+        response = self._table(table_name).get_item(Key=key)
         item = response.get("Item")
         return _deserialize(item) if item else None
 
-    def update_item(self, key: dict, updates: dict) -> None:
+    def update_item(self, table_name: str, key: dict, updates: dict) -> None:
         updates = _serialize(updates)
         set_parts, names, values = [], {}, {}
         for i, (k, v) in enumerate(updates.items()):
@@ -46,36 +60,40 @@ class DynamoDBClient:
             set_parts.append(f"{alias_n} = {alias_v}")
             names[alias_n] = k
             values[alias_v] = v
-        self.table.update_item(
+        self._table(table_name).update_item(
             Key=key,
             UpdateExpression="SET " + ", ".join(set_parts),
             ExpressionAttributeNames=names,
             ExpressionAttributeValues=values,
         )
 
-    def increment_field(self, key: dict, field: str, amount: int = 1) -> None:
-        self.table.update_item(
+    def increment_field(self, table_name: str, key: dict, field: str, amount: int = 1) -> None:
+        self._table(table_name).update_item(
             Key=key,
             UpdateExpression="ADD #f :inc",
             ExpressionAttributeNames={"#f": field},
             ExpressionAttributeValues={":inc": Decimal(str(amount))},
         )
 
-    def delete_item(self, key: dict) -> None:
-        self.table.delete_item(Key=key)
+    def delete_item(self, table_name: str, key: dict) -> None:
+        self._table(table_name).delete_item(Key=key)
 
-    def scan(self, filters: dict | None = None) -> list[dict]:
+    def scan(self, table_name: str, filters: dict | None = None) -> list[dict]:
         """Full table scan with optional equality filters. Not paginated — suitable for small datasets."""
         if not filters:
-            response = self.table.scan()
+            response = self._table(table_name).scan()
         else:
             expr = None
             for k, v in filters.items():
                 cond = Attr(k).eq(v)
                 expr = cond if expr is None else expr & cond
-            response = self.table.scan(FilterExpression=expr)
+            response = self._table(table_name).scan(FilterExpression=expr)
         return [_deserialize(item) for item in response.get("Items", [])]
 
-    def find_one(self, filters: dict) -> dict | None:
-        results = self.scan(filters)
+    def find_one(self, table_name: str, filters: dict) -> dict | None:
+        results = self.scan(table_name, filters)
         return results[0] if results else None
+
+
+# Single shared instance — import this everywhere
+client = DynamoDBClient()
