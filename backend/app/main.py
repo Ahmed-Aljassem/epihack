@@ -1,11 +1,13 @@
 import json
 from uuid import uuid4
 from decimal import Decimal
-from fastapi import FastAPI, File, Form, UploadFile
+from fastapi import Depends, FastAPI, File, Form, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.sessions import SessionMiddleware
 from app.config import get_settings
 from app.utils import dynamo
 from app.utils import s3 as s3_utils
+from app.utils.auth import get_current_user
 from app.routers import surveys, responses, alerts, dashboard
 from app.routers.auth import cognito_router
 
@@ -32,6 +34,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.add_middleware(SessionMiddleware, secret_key=settings.SECRET_KEY)
 
 # ── Routers ──────────────────────────────────────────────────────
 app.include_router(cognito_router)
@@ -94,3 +98,23 @@ async def receive_report(
     except Exception as e:
         print(f"Error receiving report: {e}")
         return {"status": "error", "message": "Failed to receive report"}
+
+@app.post("/survey/response", tags=["Surveys"])
+async def receive_survey_response(
+    survey_response: dict = Form(..., description="Survey response JSON"),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Accept a survey response.
+
+    Requires a valid Cognito id_token in the Authorization: Bearer header.
+    The request body should be a JSON object containing the survey response data.
+    """
+    try:
+        print(f"Received survey response from {current_user['email']}: {survey_response}")
+        
+        
+        return {"status": "success", "message": "Survey response received"}
+    except Exception as e:
+        print(f"Error receiving survey response: {e}")
+        return {"status": "error", "message": "Failed to receive survey response"}

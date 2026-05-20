@@ -1,6 +1,5 @@
 import httpx
 from jose import jwt as jose_jwt, JWTError
-from jose.jwk import construct as jwk_construct
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from app.config import get_settings
@@ -26,16 +25,18 @@ class _CognitoValidator:
         resp = httpx.get(self._jwks_url, timeout=10)
         resp.raise_for_status()
         self._keys = {k["kid"]: k for k in resp.json()["keys"]}
+        print(f"[auth] Loaded {len(self._keys)} JWKS keys from Cognito")
 
     def decode(self, token: str) -> dict:
         kid = jose_jwt.get_unverified_headers(token).get("kid", "")
         if kid not in self._keys:
-            self._load_keys()           # refresh once on cache miss / key rotation
+            self._load_keys()
         if kid not in self._keys:
-            raise JWTError("Unknown signing key")
+            raise JWTError(f"Unknown signing key: {kid}")
+        # Pass the raw JWK dict — the standard pattern for python-jose + Cognito
         return jose_jwt.decode(
             token,
-            jwk_construct(self._keys[kid]),
+            self._keys[kid],
             algorithms=["RS256"],
             audience=self._audience,
             issuer=self._issuer,
@@ -49,7 +50,8 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
     """Validate a Cognito id_token and return its claims as the current user."""
     try:
         return _validator.decode(token)
-    except JWTError:
+    except Exception as e:
+        print(f"[auth] Token validation failed — {type(e).__name__}: {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials",
