@@ -54,7 +54,8 @@ body {
   min-height: 100vh;
   background: var(--bg);
   color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue",
+  font-family:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue",
     "Segoe UI", Roboto, sans-serif;
   font-size: 15px;
   line-height: 1.5;
@@ -92,7 +93,9 @@ a {
   cursor: pointer;
   font-size: 14px;
   font-weight: 500;
-  transition: background-color 0.15s ease, border-color 0.15s ease,
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
     color 0.15s ease;
 }
 
@@ -174,7 +177,9 @@ a {
   color: var(--text);
   padding: 11px 14px;
   font-size: 14px;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .input:focus,
@@ -489,8 +494,9 @@ a {
 }
 
 .landing-step-num {
-  font-family: -apple-system, "SF Pro Display", BlinkMacSystemFont,
-    "Helvetica Neue", sans-serif;
+  font-family:
+    -apple-system, "SF Pro Display", BlinkMacSystemFont, "Helvetica Neue",
+    sans-serif;
   font-size: 14px;
   font-weight: 700;
   color: var(--accent);
@@ -697,7 +703,9 @@ a {
   color: var(--muted);
   font-size: 14px;
   font-weight: 500;
-  transition: background-color 0.15s ease, color 0.15s ease;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
 }
 
 .nav-item:hover {
@@ -1167,12 +1175,11 @@ a {
 
 .attach-thumb {
   height: 160px;
-  background:
-    repeating-linear-gradient(
-      135deg,
-      var(--surface-2) 0 10px,
-      var(--surface-3) 10px 20px
-    );
+  background: repeating-linear-gradient(
+    135deg,
+    var(--surface-2) 0 10px,
+    var(--surface-3) 10px 20px
+  );
   border-bottom: 1px solid var(--border);
 }
 
@@ -1409,12 +1416,11 @@ a {
 
 .flyer-canvas {
   height: 240px;
-  background:
-    repeating-linear-gradient(
-      135deg,
-      var(--surface-2) 0 10px,
-      var(--surface-3) 10px 20px
-    );
+  background: repeating-linear-gradient(
+    135deg,
+    var(--surface-2) 0 10px,
+    var(--surface-3) 10px 20px
+  );
   border-radius: 12px;
   display: grid;
   place-items: center;
@@ -1444,8 +1450,12 @@ a {
 
 .auth-pane {
   background:
-    radial-gradient(circle at 20% 15%, rgba(47, 111, 90, 0.20), transparent 55%),
-    radial-gradient(circle at 80% 85%, rgba(96, 165, 250, 0.18), transparent 55%),
+    radial-gradient(circle at 20% 15%, rgba(47, 111, 90, 0.2), transparent 55%),
+    radial-gradient(
+      circle at 80% 85%,
+      rgba(96, 165, 250, 0.18),
+      transparent 55%
+    ),
     linear-gradient(165deg, #1e4f60 0%, #245544 55%, #2f6f5a 100%);
   color: #f3faf7;
   padding: 56px 56px 40px;
@@ -1654,7 +1664,9 @@ a {
   padding: 12px 14px;
   text-align: left;
   cursor: pointer;
-  transition: border-color 0.15s ease, background-color 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease;
 }
 
 .auth-role:hover {
@@ -1730,6 +1742,10 @@ a {
   margin-bottom: 18px;
 }
 
+.filter-bar-spacer {
+  flex: 1 1 auto;
+}
+
 .filter-chip {
   border: 1px solid var(--border);
   background: var(--surface);
@@ -1739,7 +1755,10 @@ a {
   font-weight: 500;
   color: var(--muted);
   cursor: pointer;
-  transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease,
+    background-color 0.15s ease;
 }
 
 .filter-chip:hover {
@@ -1765,6 +1784,245 @@ a {
   border-radius: 18px;
   border: 1px solid var(--border);
   overflow: hidden;
+}
+
+.map-metrics-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.map-metric-card {
+  min-height: 108px;
+}
+
+.map-grid {
+  grid-template-columns: 1.45fr 1fr;
+}
+
+.map-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.map-card-header {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.map-card-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.map-card-subtitle {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.map-header-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.mapbox-stage {
+  position: relative;
+  min-height: 480px;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+  background:
+    radial-gradient(
+      circle at 20% 20%,
+      rgba(47, 111, 90, 0.08),
+      transparent 34%
+    ),
+    radial-gradient(
+      circle at 80% 12%,
+      rgba(15, 118, 110, 0.08),
+      transparent 26%
+    ),
+    var(--surface-2);
+}
+
+.mapbox-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.mapbox-canvas .mapboxgl-canvas {
+  outline: none;
+  width: 100%;
+  height: 100%;
+}
+
+.mapbox-fallback {
+  height: 100%;
+  min-height: 480px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 28px;
+  color: var(--muted);
+}
+
+.mapbox-fallback p {
+  margin: 6px 0 0;
+  max-width: 34ch;
+}
+
+.mapbox-fallback-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.map-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.map-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.map-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.preview-meta {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.cluster-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.cluster-card {
+  width: 100%;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease,
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.cluster-card:hover {
+  background: var(--surface-2);
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.cluster-card-head {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.cluster-region {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.cluster-meta {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.cluster-count {
+  min-width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.cluster-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.cluster-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.cluster-tag--dominant {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.cluster-tag-swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.cluster-empty {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 0;
+  color: var(--muted);
+}
+
+.cluster-empty-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.cluster-empty p {
+  margin: 4px 0 0;
+  font-size: 12px;
 }
 
 /* --- List cards (Rules, Team, Resources) ----------------------------- */
@@ -1889,11 +2147,26 @@ a {
   background: #ddd6fe;
 }
 
-.avatar--blue   { background: #dbeafe; color: #1e40af; }
-.avatar--green  { background: var(--accent-soft); color: var(--accent); }
-.avatar--orange { background: #fed7aa; color: #9a3412; }
-.avatar--pink   { background: #fbcfe8; color: #9d174d; }
-.avatar--gray   { background: var(--surface-3); color: var(--muted); }
+.avatar--blue {
+  background: #dbeafe;
+  color: #1e40af;
+}
+.avatar--green {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.avatar--orange {
+  background: #fed7aa;
+  color: #9a3412;
+}
+.avatar--pink {
+  background: #fbcfe8;
+  color: #9d174d;
+}
+.avatar--gray {
+  background: var(--surface-3);
+  color: var(--muted);
+}
 
 .status-dot {
   display: inline-flex;
@@ -1911,9 +2184,15 @@ a {
   background: var(--muted-2);
 }
 
-.status-dot--online::before  { background: var(--accent); }
-.status-dot--away::before    { background: var(--warn); }
-.status-dot--offline::before { background: var(--muted-2); }
+.status-dot--online::before {
+  background: var(--accent);
+}
+.status-dot--away::before {
+  background: var(--warn);
+}
+.status-dot--offline::before {
+  background: var(--muted-2);
+}
 
 /* --- Alerts list ----------------------------------------------------- */
 
@@ -1925,10 +2204,18 @@ a {
   padding: 20px 22px;
 }
 
-.alert-card--critical { border-left-color: var(--danger); }
-.alert-card--high     { border-left-color: var(--warn); }
-.alert-card--medium   { border-left-color: #ca8a04; }
-.alert-card--low      { border-left-color: var(--border-strong); }
+.alert-card--critical {
+  border-left-color: var(--danger);
+}
+.alert-card--high {
+  border-left-color: var(--warn);
+}
+.alert-card--medium {
+  border-left-color: #ca8a04;
+}
+.alert-card--low {
+  border-left-color: var(--border-strong);
+}
 
 .alert-card-head {
   display: flex;
@@ -1977,6 +2264,16 @@ a {
   .detail-grid,
   .composer-grid {
     grid-template-columns: 1fr;
+  }
+
+  .map-metrics-row,
+  .map-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .mapbox-stage,
+  .mapbox-fallback {
+    min-height: 360px;
   }
 
   .landing-pillars,
