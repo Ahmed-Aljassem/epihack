@@ -8,13 +8,9 @@ from app.config import get_settings
 from app.utils.dynamo import client as db
 from app.utils import s3 as s3_utils
 from app.utils.auth import get_current_user
-from app.routers import surveys, responses, alerts, dashboard
-from app.routers.auth import cognito_router
+from app.routers import surveys, responses, alerts, dashboard, auth
 
 settings = get_settings()
-
-REPORTS_TABLE = "epihack_reports"
-SURVEY_TABLE = "epihack_surveys"
 
 app = FastAPI(
     title="Epidemic Radar API",
@@ -39,7 +35,7 @@ app.add_middleware(
 app.add_middleware(SessionMiddleware, secret_key=settings.SECRET_KEY)
 
 # ── Routers ──────────────────────────────────────────────────────
-app.include_router(cognito_router)
+app.include_router(auth.router)
 app.include_router(surveys.router)
 app.include_router(responses.router)
 app.include_router(alerts.router)
