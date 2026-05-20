@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     # Frontend
     FRONTEND_URL: str = "http://localhost:5173"
 
+    # S3
+    S3_IMAGES_BUCKET: str = "epihack"
+
     # CORS
     CORS_ORIGINS: str = "http://localhost:5173"
 
