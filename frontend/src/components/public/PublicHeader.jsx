@@ -1,11 +1,10 @@
-import { NavLink, Link } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { Shield } from "lucide-react";
 
 const NAV_LINKS = [
-  { to: "/", label: "Today", end: true },
-  { to: "/#nearby", label: "Nearby", hash: true },
-  { to: "/#resources", label: "Resources", hash: true },
-  { to: "/#about", label: "About", hash: true },
+  { to: "#about",    label: "About" },
+  { to: "#how",      label: "How it works" },
+  { to: "#partners", label: "Partners" },
 ];
 
 export default function PublicHeader({ minimal = false, rightSlot = null }) {
@@ -20,24 +19,11 @@ export default function PublicHeader({ minimal = false, rightSlot = null }) {
 
       {!minimal && (
         <nav className="public-nav-links" aria-label="Public navigation">
-          {NAV_LINKS.map((link) =>
-            link.hash ? (
-              <a key={link.label} className="public-nav-link" href={link.to.replace("/", "")}>
-                {link.label}
-              </a>
-            ) : (
-              <NavLink
-                key={link.label}
-                to={link.to}
-                end={link.end}
-                className={({ isActive }) =>
-                  `public-nav-link ${isActive ? "is-active" : ""}`
-                }
-              >
-                {link.label}
-              </NavLink>
-            )
-          )}
+          {NAV_LINKS.map((link) => (
+            <a key={link.label} className="public-nav-link" href={link.to}>
+              {link.label}
+            </a>
+          ))}
         </nav>
       )}
 
@@ -46,8 +32,8 @@ export default function PublicHeader({ minimal = false, rightSlot = null }) {
           rightSlot
         ) : (
           <>
-            <Link className="public-nav-link" to="/login">Sign in</Link>
-            <Link className="btn btn-primary" to="/report">Report a concern</Link>
+            <Link className="public-nav-link" to="/register">Request access</Link>
+            <Link className="btn btn-primary" to="/login">Sign in</Link>
           </>
         )}
       </div>

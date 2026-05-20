@@ -10,8 +10,6 @@ import { AuthProvider, useAuth } from "./context/AuthContext";
 
 const AppLayout = lazy(() => import("./components/layout/AppLayout"));
 const PublicHomePage = lazy(() => import("./pages/PublicHomePage"));
-const PublicReportPage = lazy(() => import("./pages/PublicReportPage"));
-const PublicSentPage = lazy(() => import("./pages/PublicSentPage"));
 const LoginPage = lazy(() => import("./pages/LoginPage"));
 const RegisterPage = lazy(() => import("./pages/RegisterPage"));
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
@@ -52,10 +50,12 @@ export default function App() {
         <Toaster position="top-right" />
         <Suspense fallback={<div className="loading-screen">Loading…</div>}>
           <Routes>
-            {/* Public website */}
+            {/* Public marketing landing */}
             <Route path="/" element={<PublicHomePage />} />
-            <Route path="/report" element={<PublicReportPage />} />
-            <Route path="/report/sent" element={<PublicSentPage />} />
+
+            {/* Legacy mobile-routed paths land back on the public site */}
+            <Route path="/report" element={<Navigate to="/" replace />} />
+            <Route path="/report/sent" element={<Navigate to="/" replace />} />
 
             {/* Guest-only */}
             <Route path="/login" element={<GuestRoute><LoginPage /></GuestRoute>} />
