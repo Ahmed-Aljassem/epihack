@@ -1,0 +1,9 @@
+{
+    "email_id": "xyz@example.com",
+    "timestamp": "2026-05-20T12:00:00Z",
+    "household": [],
+    "risk_profile": {
+        "risk_score": 0.75,
+        "risk_level": "High"
+    }
+}
