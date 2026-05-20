@@ -4,13 +4,26 @@
     "long": -110.9494739,
     "timestamp": "2026-05-19T14:00:00Z",
     "report": [
-        {
-            "type": "animal",
-            "sick_flag": 0,
-            "symptoms": [],
-            "death_flag": 1,
-            "species": "sheep",
-            "number": 5
-        }
+      {
+        "type": "animal",
+        "sick_flag": 0,
+        "symptoms": [],
+        "death_flag": 1,
+        "species": "sheep",
+        "number": 5,
+        "images": []
+      },
+      {
+        "type": "human",
+        "sick_flag": 0,
+        "symptoms": [],
+        "death_flag": 1,
+        "images": []
+      },
+      {
+        "type": "environment",
+        "death_flag": 1,
+        "images": []
+      }
     ]
 }
