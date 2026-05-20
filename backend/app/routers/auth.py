@@ -1,57 +1,44 @@
-from datetime import datetime, timezone
-from fastapi import APIRouter, HTTPException, status, Depends
-from fastapi.security import OAuth2PasswordRequestForm
-from bson import ObjectId
-from app.database import users_col
-from app.schemas.schemas import UserCreate, UserOut, TokenResponse
-from app.utils.auth import hash_password, verify_password, create_access_token, get_current_user
+from fastapi import APIRouter, Request
+from fastapi.responses import RedirectResponse
+from authlib.integrations.starlette_client import OAuth
+from app.config import get_settings
 
-router = APIRouter(prefix="/api/auth", tags=["Auth"])
+settings = get_settings()
 
+_oauth = OAuth()
+_oauth.register(
+    name="oidc",
+    authority=settings.COGNITO_AUTHORITY,
+    client_id=settings.COGNITO_CLIENT_ID,
+    client_secret=settings.COGNITO_CLIENT_SECRET,
+    server_metadata_url=f"{settings.COGNITO_AUTHORITY}/.well-known/openid-configuration",
+    client_kwargs={"scope": "phone openid email"},
+)
 
-def _serialize_user(doc: dict) -> dict:
-    return {
-        "id": str(doc["_id"]),
-        "name": doc["name"],
-        "email": doc["email"],
-        "role": doc["role"],
-        "created_at": doc["created_at"],
-    }
-
-
-@router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
-async def register(payload: UserCreate):
-    if await users_col().find_one({"email": payload.email}):
-        raise HTTPException(status_code=400, detail="Email already registered")
-
-    now = datetime.now(timezone.utc)
-    doc = {
-        "name": payload.name,
-        "email": payload.email,
-        "hashed_password": hash_password(payload.password),
-        "role": payload.role,
-        "location": payload.location.model_dump() if payload.location else None,
-        "is_active": True,
-        "created_at": now,
-        "updated_at": now,
-    }
-    result = await users_col().insert_one(doc)
-    doc["_id"] = result.inserted_id
-
-    token = create_access_token({"sub": str(result.inserted_id), "role": payload.role})
-    return TokenResponse(access_token=token, user=UserOut(**_serialize_user(doc)))
+cognito_router = APIRouter(tags=["Authentication"])
 
 
-@router.post("/login", response_model=TokenResponse)
-async def login(form: OAuth2PasswordRequestForm = Depends()):
-    user = await users_col().find_one({"email": form.username})
-    if not user or not verify_password(form.password, user["hashed_password"]):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-
-    token = create_access_token({"sub": str(user["_id"]), "role": user["role"]})
-    return TokenResponse(access_token=token, user=UserOut(**_serialize_user(user)))
+@cognito_router.get("/")
+async def index(request: Request):
+    user = request.session.get("user")
+    if user:
+        return {"message": f"Hello, {user['email']}", "logout": "/logout"}
+    return {"message": "Welcome! Please login.", "login": "/login"}
 
 
-@router.get("/me", response_model=UserOut)
-async def me(current_user: dict = Depends(get_current_user)):
-    return UserOut(**_serialize_user(current_user))
+@cognito_router.get("/login")
+async def cognito_login(request: Request):
+    return await _oauth.oidc.authorize_redirect(request, settings.COGNITO_REDIRECT_URI)
+
+
+@cognito_router.get("/authorize")
+async def cognito_authorize(request: Request):
+    token = await _oauth.oidc.authorize_access_token(request)
+    request.session["user"] = dict(token["userinfo"])
+    return RedirectResponse(url="/")
+
+
+@cognito_router.get("/logout")
+async def cognito_logout(request: Request):
+    request.session.pop("user", None)
+    return RedirectResponse(url="/")

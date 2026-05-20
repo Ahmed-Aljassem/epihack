@@ -1,16 +1,19 @@
 from datetime import datetime, timezone
+from uuid import uuid4
 from fastapi import APIRouter, HTTPException, status, Depends, Query
-from bson import ObjectId
-from app.database import surveys_col, responses_col
+from app.config import get_settings
 from app.schemas.schemas import SurveyResponseCreate, SurveyResponseOut
 from app.utils.auth import get_current_user
+from app.utils.dynamo import DynamoDBClient
 
+settings = get_settings()
 router = APIRouter(prefix="/api/responses", tags=["Responses"])
+_responses = DynamoDBClient(settings.DYNAMO_RESPONSES_TABLE)
+_surveys = DynamoDBClient(settings.DYNAMO_SURVEYS_TABLE)
 
 
-def _serialize(doc: dict) -> dict:
-    doc["id"] = str(doc.pop("_id"))
-    return doc
+def _to_out(doc: dict) -> SurveyResponseOut:
+    return SurveyResponseOut(**{**doc, "id": doc["response_id"]})
 
 
 @router.post("/", response_model=SurveyResponseOut, status_code=status.HTTP_201_CREATED)
@@ -18,29 +21,23 @@ async def submit_response(
     payload: SurveyResponseCreate,
     current_user: dict = Depends(get_current_user),
 ):
-    # Verify survey exists and is active
-    survey = await surveys_col().find_one({"_id": ObjectId(payload.survey_id)})
+    survey = _surveys.get_item({"survey_id": payload.survey_id})
     if not survey:
         raise HTTPException(status_code=404, detail="Survey not found")
     if survey["status"] != "active":
         raise HTTPException(status_code=400, detail="Survey is not currently active")
 
-    now = datetime.now(timezone.utc)
     doc = {
         **payload.model_dump(),
-        "user_id": str(current_user["_id"]),
-        "submitted_at": now,
+        "response_id": str(uuid4()),
+        "user_id": current_user["user_id"],
+        # Denormalize category so dashboard can group without a join
+        "category": survey["category"],
+        "submitted_at": datetime.now(timezone.utc).isoformat(),
     }
-    result = await responses_col().insert_one(doc)
-    doc["_id"] = result.inserted_id
-
-    # Increment survey response counter
-    await surveys_col().update_one(
-        {"_id": ObjectId(payload.survey_id)},
-        {"$inc": {"response_count": 1}},
-    )
-
-    return _serialize(doc)
+    _responses.put_item(doc)
+    _surveys.increment_field({"survey_id": payload.survey_id}, "response_count")
+    return _to_out(doc)
 
 
 @router.get("/survey/{survey_id}", response_model=list[SurveyResponseOut])
@@ -50,15 +47,9 @@ async def get_responses_for_survey(
     limit: int = Query(50, ge=1, le=200),
     current_user: dict = Depends(get_current_user),
 ):
-    cursor = (
-        responses_col()
-        .find({"survey_id": survey_id})
-        .sort("submitted_at", -1)
-        .skip(skip)
-        .limit(limit)
-    )
-    docs = await cursor.to_list(length=limit)
-    return [_serialize(d) for d in docs]
+    docs = _responses.scan({"survey_id": survey_id})
+    docs.sort(key=lambda d: d.get("submitted_at", ""), reverse=True)
+    return [_to_out(d) for d in docs[skip : skip + limit]]
 
 
 @router.get("/me", response_model=list[SurveyResponseOut])
@@ -67,12 +58,6 @@ async def my_responses(
     limit: int = 20,
     current_user: dict = Depends(get_current_user),
 ):
-    cursor = (
-        responses_col()
-        .find({"user_id": str(current_user["_id"])})
-        .sort("submitted_at", -1)
-        .skip(skip)
-        .limit(limit)
-    )
-    docs = await cursor.to_list(length=limit)
-    return [_serialize(d) for d in docs]
+    docs = _responses.scan({"user_id": current_user["user_id"]})
+    docs.sort(key=lambda d: d.get("submitted_at", ""), reverse=True)
+    return [_to_out(d) for d in docs[skip : skip + limit]]

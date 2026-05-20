@@ -5,11 +5,13 @@ from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from app.config import get_settings
-from app.database import users_col
+from app.utils.dynamo import DynamoDBClient
 
 settings = get_settings()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+
+_users_client = DynamoDBClient(settings.DYNAMO_USERS_TABLE)
 
 
 def hash_password(password: str) -> str:
@@ -43,15 +45,13 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
     except JWTError:
         raise credentials_exc
 
-    from bson import ObjectId
-    user = await users_col().find_one({"_id": ObjectId(user_id)})
+    user = _users_client.get_item({"user_id": user_id})
     if not user:
         raise credentials_exc
     return user
 
 
 def require_role(*roles: str):
-    """Dependency factory: raises 403 if user's role is not in allowed roles."""
     async def checker(current_user: dict = Depends(get_current_user)):
         if current_user["role"] not in roles:
             raise HTTPException(
