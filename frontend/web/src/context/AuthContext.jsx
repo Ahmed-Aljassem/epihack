@@ -1,46 +1,75 @@
 import { createContext, useContext, useState, useEffect, useCallback } from "react";
-import { authAPI } from "../services/api";
+import { authAPI } from "../services/authAPI";
+import { tokens, parseJwt } from "../auth/tokens";
 
 const AuthContext = createContext(null);
 
-export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+function buildUser(payload) {
+  const groups = payload["cognito:groups"] ?? [];
+  return {
+    sub:    payload.sub,
+    email:  payload.email,
+    name:   payload.name ?? payload.email,
+    role:   payload["custom:role"] ?? groups[0] ?? "citizen",
+    groups,
+  };
+}
 
-  // Restore session on mount
+export function AuthProvider({ children }) {
+  const [user, setUser]                         = useState(null);
+  const [loading, setLoading]                   = useState(true);
+  const [pendingConfirmation, setPendingConfirmation] = useState(null);
+
+  // Restore session from localStorage on page load
   useEffect(() => {
-    const token = localStorage.getItem("access_token");
-    if (!token) { setLoading(false); return; }
-    authAPI.me()
-      .then((res) => setUser(res.data))
-      .catch(() => localStorage.removeItem("access_token"))
-      .finally(() => setLoading(false));
+    const token = tokens.get();
+    if (token) {
+      try { setUser(buildUser(parseJwt(token))); }
+      catch { tokens.clear(); }
+    }
+    setLoading(false);
   }, []);
 
   const login = useCallback(async (email, password) => {
-    const res = await authAPI.login(email, password);
-    localStorage.setItem("access_token", res.data.access_token);
-    setUser(res.data.user);
-    return res.data.user;
+    const { data } = await authAPI.login(email, password);
+    tokens.set(data.id_token);
+    const u = buildUser(parseJwt(data.id_token));
+    setUser(u);
+    return u;
   }, []);
 
-  const register = useCallback(async (data) => {
-    const res = await authAPI.register(data);
-    localStorage.setItem("access_token", res.data.access_token);
-    setUser(res.data.user);
-    return res.data.user;
+  const register = useCallback(async ({ name, email, password, role }) => {
+    const { data } = await authAPI.register({ name, email, password, role });
+    if (data.needs_confirmation) {
+      setPendingConfirmation(email);
+      return { needsConfirmation: true };
+    }
+    return { needsConfirmation: false };
+  }, []);
+
+  /**
+   * Confirm email, then redirect to login.
+   * (We don't have the password here so we can't auto-sign-in.)
+   */
+  const confirm = useCallback(async (email, code) => {
+    await authAPI.confirm(email, code);
+    setPendingConfirmation(null);
+    return { confirmed: true };
   }, []);
 
   const logout = useCallback(() => {
-    localStorage.removeItem("access_token");
+    tokens.clear();
     setUser(null);
   }, []);
 
-  const isAdmin = user?.role === "admin";
-  const isAnalyst = ["admin", "epidemiologist"].includes(user?.role);
+  const isAdmin   = user?.groups?.includes("admin") ?? false;
+  const isAnalyst = user?.groups?.some((g) => ["admin", "epidemiologist"].includes(g)) ?? false;
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, isAdmin, isAnalyst }}>
+    <AuthContext.Provider
+      value={{ user, loading, login, register, confirm, logout,
+               isAdmin, isAnalyst, pendingConfirmation }}
+    >
       {children}
     </AuthContext.Provider>
   );

@@ -1,7 +1,7 @@
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import {
-  LayoutDashboard, ClipboardList, BellAlert,
+  LayoutDashboard, ClipboardList, BellRing,
   FileText, LogOut, Activity, ChevronRight,
 } from "lucide-react";
 import "./AppLayout.css";
@@ -9,7 +9,7 @@ import "./AppLayout.css";
 const NAV = [
   { to: "/dashboard",     icon: LayoutDashboard, label: "Dashboard" },
   { to: "/surveys",       icon: ClipboardList,   label: "Surveys" },
-  { to: "/alerts",        icon: BellAlert,       label: "Alerts" },
+  { to: "/alerts",        icon: BellRing,        label: "Alerts" },
   { to: "/my-responses",  icon: FileText,        label: "My Reports" },
 ];
 

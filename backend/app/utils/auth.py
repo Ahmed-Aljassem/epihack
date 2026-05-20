@@ -20,6 +20,7 @@ class _CognitoValidator:
         self._issuer = settings.COGNITO_AUTHORITY
         self._audience = settings.COGNITO_CLIENT_ID
         self._keys: dict[str, dict] = {}
+        print(f"[auth] Validator initialised — audience={self._audience}")
 
     def _load_keys(self) -> None:
         resp = httpx.get(self._jwks_url, timeout=10)
