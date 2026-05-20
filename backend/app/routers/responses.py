@@ -4,12 +4,12 @@ from fastapi import APIRouter, HTTPException, status, Depends, Query
 from app.config import get_settings
 from app.schemas.schemas import SurveyResponseCreate, SurveyResponseOut
 from app.utils.auth import get_current_user
-from app.utils.dynamo import DynamoDBClient
+from app.utils.dynamo import client as db
 
 settings = get_settings()
 router = APIRouter(prefix="/api/responses", tags=["Responses"])
-_responses = DynamoDBClient(settings.DYNAMO_RESPONSES_TABLE)
-_surveys = DynamoDBClient(settings.DYNAMO_SURVEYS_TABLE)
+RESPONSES = settings.DYNAMO_RESPONSES_TABLE
+SURVEYS = settings.DYNAMO_SURVEYS_TABLE
 
 
 def _to_out(doc: dict) -> SurveyResponseOut:
@@ -21,7 +21,7 @@ async def submit_response(
     payload: SurveyResponseCreate,
     current_user: dict = Depends(get_current_user),
 ):
-    survey = _surveys.get_item({"survey_id": payload.survey_id})
+    survey = db.get_item(SURVEYS, {"survey_id": payload.survey_id})
     if not survey:
         raise HTTPException(status_code=404, detail="Survey not found")
     if survey["status"] != "active":
@@ -31,12 +31,11 @@ async def submit_response(
         **payload.model_dump(),
         "response_id": str(uuid4()),
         "user_id": current_user["sub"],
-        # Denormalize category so dashboard can group without a join
         "category": survey["category"],
         "submitted_at": datetime.now(timezone.utc).isoformat(),
     }
-    _responses.put_item(doc)
-    _surveys.increment_field({"survey_id": payload.survey_id}, "response_count")
+    db.put_item(RESPONSES, doc)
+    db.increment_field(SURVEYS, {"survey_id": payload.survey_id}, "response_count")
     return _to_out(doc)
 
 
@@ -47,7 +46,7 @@ async def get_responses_for_survey(
     limit: int = Query(50, ge=1, le=200),
     current_user: dict = Depends(get_current_user),
 ):
-    docs = _responses.scan({"survey_id": survey_id})
+    docs = db.scan(RESPONSES, {"survey_id": survey_id})
     docs.sort(key=lambda d: d.get("submitted_at", ""), reverse=True)
     return [_to_out(d) for d in docs[skip : skip + limit]]
 
@@ -58,6 +57,6 @@ async def my_responses(
     limit: int = 20,
     current_user: dict = Depends(get_current_user),
 ):
-    docs = _responses.scan({"user_id": current_user["sub"]})
+    docs = db.scan(RESPONSES, {"user_id": current_user["sub"]})
     docs.sort(key=lambda d: d.get("submitted_at", ""), reverse=True)
     return [_to_out(d) for d in docs[skip : skip + limit]]

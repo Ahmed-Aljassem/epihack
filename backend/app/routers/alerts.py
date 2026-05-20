@@ -5,11 +5,11 @@ from app.config import get_settings
 from app.schemas.schemas import AlertCreate, AlertOut
 from app.models.enums import AlertStatus, AlertSeverity, SurveyCategory, UserRole
 from app.utils.auth import get_current_user, require_role
-from app.utils.dynamo import DynamoDBClient
+from app.utils.dynamo import client as db
 
 settings = get_settings()
 router = APIRouter(prefix="/api/alerts", tags=["Alerts"])
-_alerts = DynamoDBClient(settings.DYNAMO_ALERTS_TABLE)
+TABLE = settings.DYNAMO_ALERTS_TABLE
 
 ANALYST_ROLES = (UserRole.EPIDEMIOLOGIST, UserRole.ADMIN)
 
@@ -33,7 +33,7 @@ async def list_alerts(
         filters["status"] = alert_status
     if category:
         filters["category"] = category
-    docs = _alerts.scan(filters or None)
+    docs = db.scan(TABLE, filters or None)
     docs.sort(key=lambda d: d.get("created_at", ""), reverse=True)
     return [_to_out(d) for d in docs[skip : skip + limit]]
 
@@ -52,13 +52,13 @@ async def create_alert(
         "updated_at": now,
         "resolved_by": None,
     }
-    _alerts.put_item(doc)
+    db.put_item(TABLE, doc)
     return _to_out(doc)
 
 
 @router.get("/{alert_id}", response_model=AlertOut)
 async def get_alert(alert_id: str):
-    doc = _alerts.get_item({"alert_id": alert_id})
+    doc = db.get_item(TABLE, {"alert_id": alert_id})
     if not doc:
         raise HTTPException(status_code=404, detail="Alert not found")
     return _to_out(doc)
@@ -70,7 +70,7 @@ async def update_alert_status(
     new_status: AlertStatus,
     current_user: dict = Depends(require_role(*ANALYST_ROLES)),
 ):
-    if not _alerts.get_item({"alert_id": alert_id}):
+    if not db.get_item(TABLE, {"alert_id": alert_id}):
         raise HTTPException(status_code=404, detail="Alert not found")
     updates: dict = {
         "status": new_status,
@@ -78,5 +78,5 @@ async def update_alert_status(
     }
     if new_status in (AlertStatus.RESOLVED, AlertStatus.FALSE_POSITIVE):
         updates["resolved_by"] = current_user["sub"]
-    _alerts.update_item({"alert_id": alert_id}, updates)
+    db.update_item(TABLE, {"alert_id": alert_id}, updates)
     return {"message": f"Alert status updated to {new_status}"}

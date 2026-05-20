@@ -5,7 +5,7 @@ from fastapi import Depends, FastAPI, File, Form, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from app.config import get_settings
-from app.utils import dynamo
+from app.utils.dynamo import client as db
 from app.utils import s3 as s3_utils
 from app.utils.auth import get_current_user
 from app.routers import surveys, responses, alerts, dashboard
@@ -13,7 +13,8 @@ from app.routers.auth import cognito_router
 
 settings = get_settings()
 
-dynamo_client = dynamo.DynamoDBClient(table_name="epihack_reports")
+REPORTS_TABLE = "epihack_reports"
+SURVEY_TABLE = "epihack_surveys"
 
 app = FastAPI(
     title="Epidemic Radar API",
@@ -92,7 +93,7 @@ async def receive_report(
                     for f in files
                 ]
 
-        dynamo_client.put_item(data)
+        db.put_item(settings.DYNAMO_REPORTS_TABLE, data)
         return {"status": "success", "report_id": report_id}
 
     except Exception as e:
@@ -101,7 +102,7 @@ async def receive_report(
 
 @app.post("/survey/response", tags=["Surveys"])
 async def receive_survey_response(
-    survey_response: dict = Form(..., description="Survey response JSON"),
+    survey_response: str = Form(..., description="Survey response JSON"),
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -111,9 +112,15 @@ async def receive_survey_response(
     The request body should be a JSON object containing the survey response data.
     """
     try:
+
+        data = json.loads(survey_response)
+        survey_id = str(uuid4())
+        data["survey_id"] = survey_id
+
         print(f"Received survey response from {current_user['email']}: {survey_response}")
-        
-        
+
+        db.put_item(settings.DYNAMO_SURVEYS_TABLE, data)
+
         return {"status": "success", "message": "Survey response received"}
     except Exception as e:
         print(f"Error receiving survey response: {e}")
