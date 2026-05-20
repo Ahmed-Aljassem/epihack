@@ -30,7 +30,7 @@ async def submit_response(
     doc = {
         **payload.model_dump(),
         "response_id": str(uuid4()),
-        "user_id": current_user["user_id"],
+        "user_id": current_user["sub"],
         # Denormalize category so dashboard can group without a join
         "category": survey["category"],
         "submitted_at": datetime.now(timezone.utc).isoformat(),
@@ -58,6 +58,6 @@ async def my_responses(
     limit: int = 20,
     current_user: dict = Depends(get_current_user),
 ):
-    docs = _responses.scan({"user_id": current_user["user_id"]})
+    docs = _responses.scan({"user_id": current_user["sub"]})
     docs.sort(key=lambda d: d.get("submitted_at", ""), reverse=True)
     return [_to_out(d) for d in docs[skip : skip + limit]]

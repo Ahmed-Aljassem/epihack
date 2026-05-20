@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     COGNITO_CLIENT_SECRET: str = ""
     COGNITO_REDIRECT_URI: str = "https://d84l1y8p4kdic.cloudfront.net"
 
+    # Frontend
+    FRONTEND_URL: str = "http://localhost:5173"
+
     # CORS
     CORS_ORIGINS: str = "http://localhost:5173"
 
