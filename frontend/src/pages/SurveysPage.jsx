@@ -37,7 +37,7 @@ export default function SurveysPage() {
           {(surveys || []).map((survey) => (
             <Link
               key={survey.id}
-              to={`/surveys/${survey.id}`}
+              to={survey.id}
               style={{ textDecoration: "none" }}
             >
               <div className="card" style={{ display: "flex", alignItems: "center", gap: 16, cursor: "pointer", transition: "border-color 0.15s" }}

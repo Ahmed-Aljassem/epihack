@@ -101,7 +101,7 @@ export default function SurveyDetailPage() {
     }),
     {
       successMessage: "Response submitted — thank you for participating!",
-      onSuccess: () => navigate("/my-responses"),
+      onSuccess: () => navigate("/agency/my-responses"),
     }
   );
 

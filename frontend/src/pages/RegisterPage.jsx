@@ -24,7 +24,7 @@ export default function RegisterPage() {
     setError(""); setLoading(true);
     try {
       await register(form);
-      navigate("/dashboard");
+      navigate("/agency/dashboard");
     } catch (err) {
       setError(err.response?.data?.detail || "Registration failed");
     } finally {
@@ -33,13 +33,15 @@ export default function RegisterPage() {
   };
 
   return (
-    <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: "var(--bg)", padding: "20px" }}>
-      <div style={{ width: "100%", maxWidth: 420 }}>
-        <div style={{ textAlign: "center", marginBottom: 28 }}>
-          <div style={{ display: "inline-flex", alignItems: "center", gap: 8, color: "var(--accent)", fontSize: 20, fontWeight: 700, marginBottom: 6 }}>
-            <Activity size={22} /> EpiRadar
+    <div className="auth-shell agency-theme">
+      <div className="auth-card">
+        <div className="auth-brand">
+          <div className="auth-brand-mark">
+            <Activity size={24} /> One Health AZ
           </div>
-          <p style={{ color: "var(--muted)", fontSize: 13 }}>Create your surveillance account</p>
+          <p className="auth-brand-copy">
+            Create a website account for the agency-side workflow.
+          </p>
         </div>
 
         <div className="card">

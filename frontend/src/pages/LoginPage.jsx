@@ -16,7 +16,7 @@ export default function LoginPage() {
     setError(""); setLoading(true);
     try {
       await login(email, password);
-      navigate("/dashboard");
+      navigate("/agency/dashboard");
     } catch (err) {
       setError(err.response?.data?.detail || "Login failed");
     } finally {
@@ -25,13 +25,15 @@ export default function LoginPage() {
   };
 
   return (
-    <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: "var(--bg)" }}>
-      <div style={{ width: "100%", maxWidth: 380, padding: "0 20px" }}>
-        <div style={{ textAlign: "center", marginBottom: 32 }}>
-          <div style={{ display: "inline-flex", alignItems: "center", gap: 8, color: "var(--accent)", fontSize: 20, fontWeight: 700, marginBottom: 6 }}>
-            <Activity size={22} /> EpiRadar
+    <div className="auth-shell agency-theme">
+      <div className="auth-card">
+        <div className="auth-brand">
+          <div className="auth-brand-mark">
+            <Activity size={24} /> One Health AZ
           </div>
-          <p style={{ color: "var(--muted)", fontSize: 13 }}>Participatory epidemic surveillance</p>
+          <p className="auth-brand-copy">
+            Sign in to the agency console for triage, surveys, and alerts.
+          </p>
         </div>
 
         <div className="card">
