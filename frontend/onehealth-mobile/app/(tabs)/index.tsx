@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import Svg, { Path } from 'react-native-svg';
-import ReportFlow from '@/components/ReportFlow';
+import ReportFlow from '@/components/flows/ReportFlow';
 
 const { width } = Dimensions.get('window');
 const GREEN = '#0B6623';
