@@ -134,7 +134,7 @@ export default function HomeScreen() {
               backgroundColor: '#FAFAFA', alignItems: 'center', justifyContent: 'center',
               opacity: screenOpacity, zIndex: 999
             }}>
-              <StatusBar style="dark" />
+              <StatusBar style="dark" backgroundColor="transparent" translucent={true} />
               <Animated.View style={{
                 position: 'absolute', width: 140, height: 140, borderRadius: 70,
                 backgroundColor: '#E8F5E9', opacity: pulse2, transform: [{ scale: pulse2 }],
@@ -145,7 +145,7 @@ export default function HomeScreen() {
               }} />
               <Animated.View style={{ opacity: textOpacity, transform: [{ translateY: textSlide }] }}>
                 <Text style={{ fontFamily: 'Manrope_400Regular',  fontSize: 48, letterSpacing: -1.5, color: '#111' }}>
-                  <Text style={{ fontFamily: 'Manrope_300Light' }}>One</Text>
+                  <Text style={{ color: '#B0B0B0', fontFamily: 'Manrope_300Light' }}>One</Text>
                   <Text style={{ fontFamily: 'Manrope_800ExtraBold', color: '#0B6623' }}>Health</Text>
                 </Text>
               </Animated.View>
@@ -158,7 +158,7 @@ export default function HomeScreen() {
       </Modal>
 
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-        <StatusBar style="dark" />
+        <StatusBar style="dark" backgroundColor="transparent" translucent={true} />
 
         <ScrollView showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: 100 }}

@@ -50,7 +50,6 @@ export default function RootLayout() {
         <Stack.Screen name="compose" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
         <Stack.Screen name="auth-modal" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
       </Stack>
-      <StatusBar style="auto" />
     </>
   );
 }
