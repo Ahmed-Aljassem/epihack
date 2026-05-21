@@ -6,33 +6,27 @@ automated anomaly detection to flag potential epidemic or pandemic signals.
 
 ---
 
-<<<<<<< HEAD
 ## Architecture
 
 ```
-epidemic-radar/
+epihack/
 ├── backend/                  FastAPI REST API
 │   └── app/
-│       ├── main.py           Lifespan, CORS, router wiring
+│       ├── main.py           CORS, middleware, router wiring
 │       ├── config.py         Pydantic settings
-│       ├── database.py       Motor async MongoDB client
 │       ├── models/           Domain enums
 │       ├── schemas/          Pydantic request/response schemas
 │       ├── routers/          auth · surveys · responses · alerts · dashboard
-│       ├── services/         anomaly_detector.py (APScheduler job)
-│       └── utils/            JWT auth helpers
+│       └── utils/            Cognito auth, DynamoDB client, S3 helpers
 │
 ├── frontend/                 React + Vite SPA
 │   └── src/
 │       ├── App.jsx           Router + protected routes
-│       ├── context/          AuthContext (JWT session)
+│       ├── context/          AuthContext (Cognito session)
 │       ├── hooks/            useFetch, useMutation, domain hooks
 │       ├── services/         axios API client with interceptors
 │       ├── pages/            Dashboard · Surveys · Alerts · My Responses
 │       └── components/       AppLayout + design system CSS
-│
-├── infra/
-│   └── mongo-init.js         DB & index initialization
 │
 └── docker-compose.yml        Full stack orchestration
 ```
@@ -41,110 +35,39 @@ epidemic-radar/
 
 ## Quick Start
 
-### Option A — Docker (recommended)
+### 1. Environment Variables
+
+Copy the example and fill in credentials (find in Discord):
 
 ```bash
-cp backend/.env.example backend/.env
+cp backend/.env.example .env        # backend — goes in project root
+cp frontend/.env.example frontend/web/.env  # frontend
+```
+
+### 2a. Option A — Docker (recommended)
+
+```bash
 docker-compose up --build
 ```
 
-| Service   | URL                          |
-|-----------|------------------------------|
-| Frontend  | http://localhost:5173        |
-| API docs  | http://localhost:8000/docs   |
-| MongoDB   | localhost:27017              |
+| Service  | URL                        |
+| -------- | -------------------------- |
+| Frontend | http://localhost:5173      |
+| API docs | http://localhost:8000/docs |
 
-### Option B — Local development
+### 2b. Option B — Local development
 
 **Backend**
+
 ```bash
 cd backend
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env  # configure MONGODB_URL
 uvicorn app.main:app --reload
 ```
 
 **Frontend**
-```bash
-cd frontend
-npm install
-cp .env.example .env
-npm run dev
-```
 
----
-
-## API Overview
-
-| Method | Endpoint                        | Description                   |
-|--------|---------------------------------|-------------------------------|
-| POST   | /api/auth/register              | Create account                |
-| POST   | /api/auth/login                 | Get JWT token                 |
-| GET    | /api/surveys                    | List active surveys           |
-| POST   | /api/surveys                    | Create survey (analyst+)      |
-| POST   | /api/responses                  | Submit survey response        |
-| GET    | /api/alerts                     | List alerts (filterable)      |
-| PATCH  | /api/alerts/{id}/status         | Update alert status           |
-| GET    | /api/dashboard/stats            | Aggregate stats               |
-| GET    | /api/dashboard/trend            | Daily response trend          |
-
-Full interactive docs: **http://localhost:8000/docs**
-
----
-
-## User Roles & Permissions
-
-| Role             | Submit Responses | Create Surveys | Manage Alerts |
-|------------------|:---:|:---:|:---:|
-| `citizen`        | ✅  | ❌  | ❌  |
-| `health_worker`  | ✅  | ✅  | ❌  |
-| `veterinarian`   | ✅  | ✅  | ❌  |
-| `epidemiologist` | ✅  | ✅  | ✅  |
-| `admin`          | ✅  | ✅  | ✅  |
-
----
-
-## Anomaly Detection
-
-The background service (`app/services/anomaly_detector.py`) runs every **15 minutes**:
-
-1. Fetches all active surveys
-2. Buckets responses by day over a **14-day window**
-3. Computes rolling mean + std deviation
-4. Flags today's count if it exceeds **Z > 2.5σ**
-5. Auto-creates an alert (severity scales with Z-score) if no open alert exists
-
-Tune via env vars:
-```
-ALERT_SCAN_INTERVAL_MINUTES=15
-ALERT_ANOMALY_Z_SCORE=2.5
-```
-
----
-
-## One Health Survey Categories
-
-| Category      | Signal Domain                    |
-|---------------|----------------------------------|
-| `human`       | Fever, respiratory symptoms, GI  |
-| `animal`      | Livestock / wildlife morbidity   |
-| `environment` | Water quality, soil, air anomaly |
-| `vector`      | Mosquito, tick, rodent density   |
-
----
-
-## Roadmap
-
-=======
-**Backend**
-```bash
-cd backend
-pip install -r requirements.txt
-uvicorn app.main:app --reload
-```
-
-**Frontend**
 ```bash
 cd frontend
 npm install
@@ -154,8 +77,6 @@ npm run dev
 ---
 
 ## API Overview
-
-Details to be added for below:
 
 ### Authentication
 
@@ -165,18 +86,17 @@ Using AWS Cognito
 
 Using AWS DynamoDB
 
-
-| Method | Endpoint                        | Description                   |
-|--------|---------------------------------|-------------------------------|
-| POST   | /api/auth/register              | Create account                |
-| POST   | /api/auth/login                 | Get JWT token                 |
-| GET    | /api/surveys                    | List active surveys           |
-| POST   | /api/surveys                    | Create survey (analyst+)      |
-| POST   | /api/responses                  | Submit survey response        |
-| GET    | /api/alerts                     | List alerts (filterable)      |
-| PATCH  | /api/alerts/{id}/status         | Update alert status           |
-| GET    | /api/dashboard/stats            | Aggregate stats               |
-| GET    | /api/dashboard/trend            | Daily response trend          |
+| Method | Endpoint                | Description              |
+| ------ | ----------------------- | ------------------------ |
+| POST   | /api/auth/register      | Create account           |
+| POST   | /api/auth/login         | Get JWT token            |
+| GET    | /api/surveys            | List active surveys      |
+| POST   | /api/surveys            | Create survey (analyst+) |
+| POST   | /api/responses          | Submit survey response   |
+| GET    | /api/alerts             | List alerts (filterable) |
+| PATCH  | /api/alerts/{id}/status | Update alert status      |
+| GET    | /api/dashboard/stats    | Aggregate stats          |
+| GET    | /api/dashboard/trend    | Daily response trend     |
 
 Full interactive docs: **http://localhost:8000/docs**
 
@@ -185,37 +105,19 @@ Full interactive docs: **http://localhost:8000/docs**
 ## User Roles & Permissions
 
 | Role             | Submit Responses | Create Surveys | Manage Alerts |
-|------------------|:---:|:---:|:---:|
-| `citizen`        | ✅  | ❌  | ❌  |
-| `health_worker`  | ✅  | ✅  | ❌  |
-| `veterinarian`   | ✅  | ✅  | ❌  |
-| `epidemiologist` | ✅  | ✅  | ✅  |
-| `admin`          | ✅  | ✅  | ✅  |
-
----
-
-## Anomaly Detection
-
-The background service (`app/services/anomaly_detector.py`) runs every **15 minutes**:
-
-1. Fetches all active surveys
-2. Buckets responses by day over a **14-day window**
-3. Computes rolling mean + std deviation
-4. Flags today's count if it exceeds **Z > 2.5σ**
-5. Auto-creates an alert (severity scales with Z-score) if no open alert exists
-
-Tune via env vars:
-```
-ALERT_SCAN_INTERVAL_MINUTES=15
-ALERT_ANOMALY_Z_SCORE=2.5
-```
+| ---------------- | :--------------: | :------------: | :-----------: |
+| `citizen`        |        ✅        |       ❌       |      ❌       |
+| `health_worker`  |        ✅        |       ✅       |      ❌       |
+| `veterinarian`   |        ✅        |       ✅       |      ❌       |
+| `epidemiologist` |        ✅        |       ✅       |      ✅       |
+| `admin`          |        ✅        |       ✅       |      ✅       |
 
 ---
 
 ## One Health Survey Categories
 
 | Category      | Signal Domain                    |
-|---------------|----------------------------------|
+| ------------- | -------------------------------- |
 | `human`       | Fever, respiratory symptoms, GI  |
 | `animal`      | Livestock / wildlife morbidity   |
 | `environment` | Water quality, soil, air anomaly |
@@ -225,7 +127,6 @@ ALERT_ANOMALY_Z_SCORE=2.5
 
 ## Roadmap
 
->>>>>>> 72c64944a5e496fd7be003078c7848a3d6f8eb92
 - [ ] Geospatial clustering (PostGIS / MongoDB $geoNear)
 - [ ] WebSocket real-time alert push
 - [ ] Mobile-first PWA survey mode (offline capable)

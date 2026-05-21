@@ -1,37 +1,3 @@
-<<<<<<< HEAD
-from contextlib import asynccontextmanager
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from loguru import logger
-
-from app.config import get_settings
-from app.database import connect_db, close_db
-from app.routers import auth, surveys, responses, alerts, dashboard
-from app.services.anomaly_detector import scan_for_anomalies
-
-settings = get_settings()
-scheduler = AsyncIOScheduler()
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Startup
-    await connect_db()
-    scheduler.add_job(
-        scan_for_anomalies,
-        "interval",
-        minutes=settings.ALERT_SCAN_INTERVAL_MINUTES,
-        id="anomaly_scan",
-    )
-    scheduler.start()
-    logger.info(f"🚀 Epidemic Radar API starting [{settings.ENVIRONMENT}]")
-    yield
-    # Shutdown
-    scheduler.shutdown()
-    await close_db()
-
-=======
 import json
 from uuid import uuid4
 from decimal import Decimal
@@ -42,10 +8,9 @@ from app.config import get_settings
 from app.utils.dynamo import client as db
 from app.utils import s3 as s3_utils
 from app.utils.auth import get_current_user
-from app.routers import surveys, responses, alerts, dashboard, auth
+from app.routers import surveys, responses, dashboard, auth
 
 settings = get_settings()
->>>>>>> 72c64944a5e496fd7be003078c7848a3d6f8eb92
 
 app = FastAPI(
     title="Epidemic Radar API",
@@ -56,45 +21,26 @@ app = FastAPI(
     version="0.1.0",
     docs_url="/docs",
     redoc_url="/redoc",
-<<<<<<< HEAD
-    lifespan=lifespan,
-)
-
-# ── CORS ─────────────────────────────────────────────────────────
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.cors_origins_list,
-=======
 )
 
 # ── Middleware ────────────────────────────────────────────────────
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
->>>>>>> 72c64944a5e496fd7be003078c7848a3d6f8eb92
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-<<<<<<< HEAD
-=======
 app.add_middleware(SessionMiddleware, secret_key=settings.SECRET_KEY)
 
->>>>>>> 72c64944a5e496fd7be003078c7848a3d6f8eb92
 # ── Routers ──────────────────────────────────────────────────────
 app.include_router(auth.router)
 app.include_router(surveys.router)
 app.include_router(responses.router)
-app.include_router(alerts.router)
 app.include_router(dashboard.router)
 
 
-<<<<<<< HEAD
-@app.get("/health", tags=["Health"])
-async def health_check():
-    return {"status": "ok", "env": settings.ENVIRONMENT}
-=======
 # ── Core endpoints ────────────────────────────────────────────────
 @app.get("/health", tags=["Health"])
 async def health_check():
@@ -174,4 +120,3 @@ async def receive_survey_response(
     except Exception as e:
         print(f"Error receiving survey response: {e}")
         return {"status": "error", "message": "Failed to receive survey response"}
->>>>>>> 72c64944a5e496fd7be003078c7848a3d6f8eb92
