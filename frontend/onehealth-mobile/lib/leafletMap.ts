@@ -120,6 +120,9 @@ export function buildMapHTML(): string {
     });
 
     var markersLayer = L.layerGroup().addTo(map);
+    var symptomMarkersLayer = L.layerGroup().addTo(map);
+    var symptomFilter = null; // null = show all, or Set of symptom keys
+    var allPoints = []; // store full point list for re-rendering on filter change
 
     function subTypeOf(p) {
       if (p.type === 'human') return p.health === 'healthy' ? 'humanHealthy' : 'humanSick';
@@ -134,7 +137,27 @@ export function buildMapHTML(): string {
       });
       SUBS.forEach(function (sub) { layers[sub].setLatLngs(buckets[sub]); });
       markerData = markers || [];
+      allPoints = points || [];
+      renderSymptomDots();
       renderMarkers();
+      var SYMPTOM_COLORS_MAP = {}; // populated from RN via SET_SYMPTOM_FILTER
+
+function renderSymptomDots() {
+  symptomMarkersLayer.clearLayers();
+  if (!symptomFilter || symptomFilter.length === 0) return;
+  allPoints.forEach(function(p) {
+    if (p.type !== 'human' || !enabled.human) return;
+    var syms = p.symptoms || [];
+    var match = symptomFilter.some(function(s) { return syms.indexOf(s) >= 0; });
+    if (!match) return;
+    var color = SYMPTOM_COLORS_MAP[syms[0]] || '#e02020';
+    var dot = L.circleMarker([p.lat, p.lng], {
+      radius: 5, fillColor: color, color: '#fff',
+      weight: 1.5, opacity: 1, fillOpacity: 0.85
+    });
+    symptomMarkersLayer.addLayer(dot);
+  });
+}
     }
 
     function renderMarkers() {
@@ -178,6 +201,7 @@ export function buildMapHTML(): string {
         else { map.removeLayer(layers[sub]); }
       });
       renderMarkers();
+      renderSymptomDots();
     }
 
     function esc(s) {
@@ -233,6 +257,11 @@ export function buildMapHTML(): string {
         else if (msg.kind === 'TOGGLE') toggle(msg.layer, msg.on);
         else if (msg.kind === 'SET_RESOURCES') setResources(msg.group, msg.points);
         else if (msg.kind === 'TOGGLE_RESOURCE') toggleResource(msg.group, msg.on);
+        else if (msg.kind === 'SET_SYMPTOM_FILTER') {
+            symptomFilter = msg.symptoms; // array of symptom keys, or null
+            SYMPTOM_COLORS_MAP = msg.colors || {};
+            renderSymptomDots();
+            }
       } catch (e) {}
     }
 

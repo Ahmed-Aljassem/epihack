@@ -9,6 +9,47 @@
 export type ReportType = 'human' | 'animal' | 'environment';
 export type Health = 'healthy' | 'sick';
 
+export type Symptom =
+  | 'none' | 'fever' | 'cough' | 'breathing' | 'nausea' | 'diarrhea'
+  | 'sore_throat' | 'rash' | 'chills' | 'muscle_aches' | 'red_eyes'
+  | 'loss_smell_taste' | 'bleeding' | 'yellow_skin' | 'bloody_urine';
+
+export const SYMPTOM_LABELS: Record<Symptom, string> = {
+  none: 'No symptoms',
+  fever: 'Fever',
+  cough: 'Cough / congestion',
+  breathing: 'Difficulty breathing',
+  nausea: 'Nausea / vomiting',
+  diarrhea: 'Diarrhea',
+  sore_throat: 'Sore throat',
+  rash: 'Rash',
+  chills: 'Chills',
+  muscle_aches: 'Muscle / body aches',
+  red_eyes: 'Red eyes',
+  loss_smell_taste: 'Loss of smell / taste',
+  bleeding: 'Bleeding from body openings',
+  yellow_skin: 'Yellow skin / eyes',
+  bloody_urine: 'Discolored / bloody urine',
+};
+
+// Color for each symptom — used for map dot markers and panel swatches
+export const SYMPTOM_COLORS: Record<Symptom, string> = {
+  none: '#52c41a',
+  fever: '#e02020',
+  cough: '#ff8c00',
+  breathing: '#c0392b',
+  nausea: '#e67e22',
+  diarrhea: '#d35400',
+  sore_throat: '#f39c12',
+  rash: '#8e44ad',
+  chills: '#2980b9',
+  muscle_aches: '#e74c3c',
+  red_eyes: '#FF6B6B',
+  loss_smell_taste: '#16a085',
+  bleeding: '#922b21',
+  yellow_skin: '#d4ac0d',
+  bloody_urine: '#a93226',
+};
 // Sub-categories used for coloring + marker breakdown.
 // (Humans split into healthy/sick; animals & environment stay single.)
 export type SubType = 'humanHealthy' | 'humanSick' | 'animal' | 'environment';
@@ -20,6 +61,7 @@ export type HeatPoint = {
   weight: number; // 0..1 — uniform (1) so density drives heat
   zip?: string;
   health?: Health; // only meaningful when type === 'human'
+  symptoms?: Symptom[]; // only for type === 'human'
 };
 
 export type MarkerData = {
