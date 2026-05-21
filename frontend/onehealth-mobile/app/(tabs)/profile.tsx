@@ -61,8 +61,24 @@ export default function ProfileScreen() {
       { text: 'Cancel', style: 'cancel' },
       { text: 'Save', onPress: async (val) => {
         if (!val) return;
-        await supabase.auth.updateUser({ data: { [field]: val } });
-        load();
+        try {
+          // 1. Update Auth Metadata (User object)
+          await supabase.auth.updateUser({ data: { [field]: val } });
+          
+          // 2. Add to Supabase Database (profiles table)
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.user?.id) {
+            await supabase.from('profiles').upsert({ 
+              id: session.user.id, 
+              [field]: val,
+              updated_at: new Date().toISOString()
+            });
+          }
+          
+          load();
+        } catch (err) {
+          console.log('Error saving to database:', err);
+        }
       }}
     ], 'plain-text', '', keyboardType);
   };
