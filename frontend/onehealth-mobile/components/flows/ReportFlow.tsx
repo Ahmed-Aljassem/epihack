@@ -10,6 +10,7 @@ import * as Haptics from 'expo-haptics';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import { getLang, setLang as setStorageLang } from '@/utils/storage';
 
 // ─── Theme — matches OneHealth splash ────────────────────────
@@ -708,6 +709,7 @@ function Done({ t, mode, reset, onSignUp, loc }: { t: Th; mode: string; reset: (
           <Text style={{ fontFamily: 'Manrope_400Regular',  color: t.sub, fontSize: 12, marginTop: 2 }}>{loc.pima}</Text>
         </View>
         <TouchableOpacity activeOpacity={0.8}
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.navigate('/(tabs)/map'); }}
           style={{ backgroundColor: t.card, borderRadius: 14, paddingVertical: 14, width: '100%', alignItems: 'center', marginBottom: 10, flexDirection: 'row', justifyContent: 'center', gap: 8 }}>
           <Ionicons name="map-outline" size={16} color={t.text} />
           <Text style={{ color: t.text, fontSize: 15, fontFamily: 'Manrope_500Medium' }}>{loc.view_map}</Text>

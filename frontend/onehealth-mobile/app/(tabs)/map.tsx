@@ -1,286 +1,229 @@
-import React, { useState, useRef } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
+import { View, Text, TouchableOpacity, useColorScheme, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
+import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import * as Location from 'expo-location';
-import { WebView } from 'react-native-webview';
 
-const t = {
-  bg: '#FAFAFA', card: '#FFFFFF', text: '#111', sub: '#888',
-  hint: '#B0B0B0', line: '#EEEEEE', fill: '#F2F2F2',
-  accent: '#0B6623', accentSoft: '#F0F7F1', accentMid: '#D5E8D4',
+import { buildMapHTML, SUB_COLOR } from '@/lib/leafletMap';
+import { aggregateMarkers, generateDummyPoints, getSubmittedPoints, type ReportType } from '@/lib/reports';
+import { RESOURCE_GROUPS, fetchResources, type ResourceGroup } from '@/lib/resources';
+
+// Minimal palette mirroring ReportFlow's brand colors.
+const TH = {
+  light: { bg: '#FAFAFA', card: '#FFFFFF', text: '#111', sub: '#888', line: '#EEEEEE', accent: '#0B6623', bar: 'dark' as const },
+  dark: { bg: '#000', card: '#111', text: '#EEE', sub: '#888', line: '#1A1A1A', accent: '#4CAF50', bar: 'light' as const },
 };
 
-const FILTERS = ['All', 'People', 'Animals', 'Environment'];
-
-// City-level macro stats (shown when zoomed out)
-const CITIES = [
-  { id: 'phx', name: 'Phoenix Metro', zip: 'Phoenix Area', count: 142, top: 'Flu A', lat: 33.4484, lng: -112.0740, trend: '+12' },
-  { id: 'tuc', name: 'Tucson Area', zip: 'Tucson Area', count: 89, top: 'Stomach', lat: 32.2226, lng: -110.9747, trend: '-3' },
-  { id: 'flg', name: 'Flagstaff', zip: '86001', count: 24, top: 'Cough', lat: 35.1983, lng: -111.6513, trend: '+5' },
-  { id: 'yum', name: 'Yuma', zip: '85364', count: 18, top: 'Heat', lat: 32.6927, lng: -114.6277, trend: '+2' },
-  { id: 'pre', name: 'Prescott', zip: '86301', count: 12, top: 'Allergies', lat: 34.5400, lng: -112.4685, trend: '0' },
+// Each toggle row; the Human row shows two swatches (sick + healthy).
+const LAYERS: { type: ReportType; label: string; swatches: string[] }[] = [
+  { type: 'human', label: 'Human (sick / healthy)', swatches: [SUB_COLOR.humanSick, SUB_COLOR.humanHealthy] },
+  { type: 'animal', label: 'Animal', swatches: [SUB_COLOR.animal] },
+  { type: 'environment', label: 'Environment', swatches: [SUB_COLOR.environment] },
 ];
-
-// Zip-level micro stats (shown when zoomed in)
-const ZIPS = [
-  { name: 'Downtown PHX', zip: '85001', count: 60, top: 'Flu A', lat: 33.44, lng: -112.07, trend: '+5' },
-  { name: 'North PHX', zip: '85032', count: 42, top: 'Flu B', lat: 33.62, lng: -112.00, trend: '+4' },
-  { name: 'Glendale', zip: '85301', count: 40, top: 'Cough', lat: 33.54, lng: -112.18, trend: '+3' },
-  { name: 'Downtown TUC', zip: '85701', count: 50, top: 'Stomach', lat: 32.22, lng: -110.97, trend: '-1' },
-  { name: 'UofA Campus', zip: '85719', count: 39, top: 'Headache', lat: 32.24, lng: -110.95, trend: '-2' },
-];
-
-const AREAS = [...CITIES, ...ZIPS];
 
 export default function MapScreen() {
-  const [filter, setFilter] = useState('All');
-  const [selected, setSelected] = useState<string | null>(null);
-  const [userLoc, setUserLoc] = useState<{lat: number, lng: number} | null>(null);
-  const [mapLoaded, setMapLoaded] = useState(false);
-  const webviewRef = useRef<WebView>(null);
+  const scheme = useColorScheme();
+  const t = scheme === 'dark' ? TH.dark : TH.light;
 
-  React.useEffect(() => {
-    (async () => {
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') return;
-      let loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      setUserLoc({ lat: loc.coords.latitude, lng: loc.coords.longitude });
-    })();
+  const webRef = useRef<WebView>(null);
+  const [visible, setVisible] = useState<Record<ReportType, boolean>>({
+    human: true,
+    animal: true,
+    environment: true,
+  });
+
+  // Resources panel: which tab is shown, which groups are on, and which are loading.
+  const [panelTab, setPanelTab] = useState<'reports' | 'resources'>('reports');
+  const [resourceOn, setResourceOn] = useState<Record<ResourceGroup, boolean>>({
+    coolingCenters: false,
+    hydrationStations: false,
+    respiteCenters: false,
+  });
+  const [loadingRes, setLoadingRes] = useState<Partial<Record<ResourceGroup, boolean>>>({});
+  const loadedRef = useRef<Set<ResourceGroup>>(new Set()); // groups already fetched this session
+
+  const html = useMemo(() => buildMapHTML(), []);
+
+  const send = useCallback((msg: object) => {
+    const raw = JSON.stringify(msg);
+    webRef.current?.injectJavaScript(`window.handleMessage(${JSON.stringify(raw)}); true;`);
   }, []);
 
-  React.useEffect(() => {
-    if (mapLoaded && userLoc) {
-      const script = `
-        if (window.map) {
-           window.map.flyTo([${userLoc.lat}, ${userLoc.lng}], 10, { duration: 1.5 });
-           
-           // Blue User Dot
-           L.circleMarker([${userLoc.lat}, ${userLoc.lng}], {
-              radius: 8, fillColor: '#007AFF', color: '#FFF', weight: 3, opacity: 1, fillOpacity: 1
-           }).addTo(window.map);
-           
-           // Soft blue radar glow
-           L.circle([${userLoc.lat}, ${userLoc.lng}], {
-              radius: 4000, fillColor: '#007AFF', color: '#007AFF', weight: 1, opacity: 0.3, fillOpacity: 0.1
-           }).addTo(window.map);
+  // The WebView posts { kind: 'READY' } once Leaflet is initialized.
+  const onMessage = useCallback(
+    (e: { nativeEvent: { data: string } }) => {
+      try {
+        const msg = JSON.parse(e.nativeEvent.data);
+        if (msg.kind === 'READY') {
+          const points = [...generateDummyPoints(), ...getSubmittedPoints()];
+          send({ kind: 'SET_DATA', points, markers: aggregateMarkers(points) });
         }
-        true;
-      `;
-      webviewRef.current?.injectJavaScript(script);
-    }
-  }, [mapLoaded, userLoc]);
+      } catch {}
+    },
+    [send]
+  );
 
-  const selArea = AREAS.find(x => x.zip === selected);
+  const toggle = useCallback(
+    (type: ReportType) => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      setVisible((prev) => {
+        const on = !prev[type];
+        send({ kind: 'TOGGLE', layer: type, on });
+        return { ...prev, [type]: on };
+      });
+    },
+    [send]
+  );
 
-  const onMarkerPress = (zip: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setSelected(zip === selected ? null : zip);
-  };
+  // Toggle a resource group. On first enable, lazily fetch its locations
+  // (with bundled fallback) and push them to the WebView before showing.
+  const toggleResource = useCallback(
+    async (group: ResourceGroup) => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      const on = !resourceOn[group];
+      setResourceOn((prev) => ({ ...prev, [group]: on }));
 
-  const htmlContent = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-        <style>
-            body { padding: 0; margin: 0; background-color: #FAFAFA; }
-            #map { height: 100vh; width: 100vw; }
-            .leaflet-control-attribution { display: none; }
-            
-            .stat-marker {
-                background: #FFFFFF;
-                color: #0B6623;
-                border: 2px solid #0B6623;
-                border-radius: 50%;
-                text-align: center;
-                font-weight: 800;
-                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-                font-size: 14px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            }
-            .stat-marker.selected {
-                background: #0B6623;
-                color: #FFFFFF;
-                border: 2px solid #FFFFFF;
-                transform: scale(1.1);
-            }
-        </style>
-    </head>
-    <body>
-        <div id="map"></div>
-        <script>
-            window.map = L.map('map', { zoomControl: false }).setView([34.0489, -111.0937], 6);
-            
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-                maxZoom: 19
-            }).addTo(map);
-
-            var cities = ${JSON.stringify(CITIES)};
-            var zips = ${JSON.stringify(ZIPS)};
-            var selectedZip = "${selected || ''}";
-            
-            var currentLayerGroup = L.layerGroup().addTo(map);
-
-            function renderMarkers() {
-                currentLayerGroup.clearLayers();
-                var zoom = map.getZoom();
-                var isZoomedIn = zoom >= 8;
-                
-                // Show Cities if zoomed out, Zips + Outer Cities if zoomed in
-                var dataToShow = isZoomedIn ? [].concat(zips, cities.filter(c => c.id !== 'phx' && c.id !== 'tuc')) : cities;
-
-                dataToShow.forEach(function(a) {
-                    var isSelected = a.zip === selectedZip;
-                    
-                    // Translucent Heatmap Circle
-                    L.circle([a.lat, a.lng], {
-                        color: '#0B6623',
-                        weight: isSelected ? 2 : 1,
-                        fillColor: '#0B6623',
-                        fillOpacity: isSelected ? 0.3 : 0.15,
-                        radius: isZoomedIn ? 3000 + (a.count * 50) : 8000 + (a.count * 150)
-                    }).addTo(currentLayerGroup);
-
-                    // Clean white stat bubble
-                    var size = a.count > 100 ? 36 : 30;
-                    var icon = L.divIcon({
-                        className: 'stat-marker ' + (isSelected ? 'selected' : ''),
-                        html: a.count,
-                        iconSize: [size, size],
-                        iconAnchor: [size/2, size/2]
-                    });
-                    
-                    var marker = L.marker([a.lat, a.lng], { icon: icon }).addTo(currentLayerGroup);
-                    
-                    marker.on('click', function() {
-                        window.ReactNativeWebView.postMessage(a.zip);
-                    });
-                });
-            }
-
-            map.on('zoomend', renderMarkers);
-            renderMarkers(); // Initial render
-
-            // Smoothly pan map if selected
-            if (selectedZip) {
-                var allData = [].concat(cities, zips);
-                var sel = allData.find(x => x.zip === selectedZip);
-                if (sel) {
-                    map.flyTo([sel.lat - 0.2, sel.lng], map.getZoom() > 8 ? map.getZoom() : 9, { duration: 0.5 });
-                }
-            }
-        </script>
-    </body>
-    </html>
-  `;
+      if (on && !loadedRef.current.has(group)) {
+        setLoadingRes((prev) => ({ ...prev, [group]: true }));
+        try {
+          const points = await fetchResources(group);
+          loadedRef.current.add(group);
+          send({ kind: 'SET_RESOURCES', group, points });
+        } finally {
+          setLoadingRes((prev) => ({ ...prev, [group]: false }));
+        }
+      }
+      send({ kind: 'TOGGLE_RESOURCE', group, on });
+    },
+    [resourceOn, send]
+  );
 
   return (
     <View style={{ flex: 1, backgroundColor: t.bg }}>
-      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-        
-        {/* Full Bleed Leaflet WebView Map */}
-        <View style={{ height: Dimensions.get('window').height * 0.42, width: '100%', borderBottomWidth: 1.5, borderBottomColor: t.line }}>
-          <WebView 
-            ref={webviewRef}
-            source={{ html: htmlContent }}
-            style={{ flex: 1 }}
-            scrollEnabled={false}
-            onLoadEnd={() => setMapLoaded(true)}
-            onMessage={(event) => {
-              const zip = event.nativeEvent.data;
-              onMarkerPress(zip);
-            }}
-          />
-        </View>
+      <StatusBar style={t.bar} />
+      <WebView
+        ref={webRef}
+        originWhitelist={['*']}
+        source={{ html }}
+        onMessage={onMessage}
+        style={{ flex: 1, backgroundColor: t.bg }}
+        // Heatmap rendering benefits from hardware acceleration on Android.
+        androidLayerType="hardware"
+      />
 
-        <View style={{ flex: 1 }}>
-          <View style={{ paddingHorizontal: 24, paddingTop: 20, paddingBottom: 16 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
-              <Ionicons name="location-outline" size={14} color={t.sub} />
-              <Text style={{ color: t.sub, fontSize: 14, fontFamily: 'Manrope_500Medium' }}>Arizona, US</Text>
-            </View>
+      {/* Title chip — replaces the back button, since this is now a tab. */}
+      <SafeAreaView style={{ position: 'absolute', top: 0, left: 0, right: 0 }} pointerEvents="box-none">
+        <View
+          style={{
+            alignSelf: 'flex-start', marginTop: 8, marginLeft: 16,
+            flexDirection: 'row', alignItems: 'center', gap: 6,
+            paddingVertical: 8, paddingHorizontal: 14, borderRadius: 20,
+            backgroundColor: t.card,
+            shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 3,
+          }}>
+          <Ionicons name="map" size={16} color={t.accent} />
+          <Text style={{ color: t.text, fontSize: 15, fontWeight: '700' }}>Report Heatmap</Text>
+        </View>
+      </SafeAreaView>
+
+      {/* Layer panel. Plain absolute View (not bottom SafeAreaView) so it sits
+          just above the tab bar without double-counting the home-indicator inset. */}
+      <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }} pointerEvents="box-none">
+        <View style={{
+          margin: 16, padding: 8, borderRadius: 16, backgroundColor: t.card,
+          shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 10, shadowOffset: { width: 0, height: 3 }, elevation: 4,
+        }}>
+          {/* Segmented [ Report Layers | Resources ] switcher. */}
+          <View style={{ flexDirection: 'row', backgroundColor: t.line, borderRadius: 10, padding: 3, marginBottom: 4 }}>
+            {([['reports', 'Report Layers'], ['resources', 'Resources']] as const).map(([key, label]) => {
+              const active = panelTab === key;
+              return (
+                <TouchableOpacity
+                  key={key}
+                  activeOpacity={0.8}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setPanelTab(key); }}
+                  style={{
+                    flex: 1, paddingVertical: 8, borderRadius: 8, alignItems: 'center',
+                    backgroundColor: active ? t.card : 'transparent',
+                    shadowColor: '#000', shadowOpacity: active ? 0.1 : 0, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: active ? 2 : 0,
+                  }}>
+                  <Text style={{ color: active ? t.accent : t.sub, fontSize: 13, fontWeight: active ? '700' : '500' }}>{label}</Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
 
-          {selArea ? (
-            <View style={{ paddingHorizontal: 24, flex: 1 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
-                <View>
-                  <Text style={{ fontSize: 24, fontFamily: 'Manrope_800ExtraBold', color: t.text, letterSpacing: -0.5 }}>{selArea.name}</Text>
-                  <Text style={{ fontSize: 14, fontFamily: 'Manrope_500Medium', color: t.sub, marginTop: 2 }}>{selArea.zip}</Text>
-                </View>
-                <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setSelected(null); }} 
-                  style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: t.fill, alignItems: 'center', justifyContent: 'center' }}>
-                  <Ionicons name="close" size={16} color={t.text} />
-                </TouchableOpacity>
-              </View>
-              
-              <View style={{ flexDirection: 'row', gap: 12 }}>
-                <View style={{ flex: 1, backgroundColor: t.card, borderWidth: 1.5, borderColor: t.line, borderRadius: 14, padding: 16 }}>
-                  <Text style={{ color: t.sub, fontSize: 12, fontFamily: 'Manrope_700Bold', textTransform: 'uppercase', letterSpacing: 1.2 }}>Total Reports</Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 }}>
-                    <Text style={{ fontSize: 32, fontFamily: 'Manrope_800ExtraBold', color: t.text, letterSpacing: -1 }}>{selArea.count}</Text>
-                    <Text style={{ fontSize: 14, fontFamily: 'Manrope_700Bold', color: t.sub }}>{selArea.trend}</Text>
-                  </View>
-                </View>
-                
-                <View style={{ flex: 1, backgroundColor: t.accentSoft, borderWidth: 1.5, borderColor: t.accentMid, borderRadius: 14, padding: 16 }}>
-                  <Text style={{ color: t.accent, fontSize: 12, fontFamily: 'Manrope_700Bold', textTransform: 'uppercase', letterSpacing: 1.2 }}>Top Issue</Text>
-                  <Text style={{ fontSize: 20, fontFamily: 'Manrope_700Bold', color: t.accent, marginTop: 8, letterSpacing: -0.3 }}>{selArea.top}</Text>
-                </View>
-              </View>
-            </View>
-          ) : (
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40 }}>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 20 }}
-                contentContainerStyle={{ gap: 8 }}>
-                {FILTERS.map(f => {
-                  const on = filter === f;
-                  return (
-                    <TouchableOpacity key={f} activeOpacity={0.7}
-                      onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setFilter(f); }}
-                      style={{
-                        paddingVertical: 8, paddingHorizontal: 16, borderRadius: 100,
-                        backgroundColor: on ? t.text : t.card,
-                        borderWidth: 1.5, borderColor: on ? t.text : t.line,
+          {panelTab === 'reports'
+            ? LAYERS.map(({ type, label, swatches }, i) => {
+                const on = visible[type];
+                return (
+                  <TouchableOpacity
+                    key={type}
+                    activeOpacity={0.7}
+                    onPress={() => toggle(type)}
+                    style={{
+                      flexDirection: 'row', alignItems: 'center', gap: 12,
+                      paddingVertical: 12, paddingHorizontal: 10,
+                      borderTopWidth: i === 0 ? 0 : 1, borderTopColor: t.line,
+                    }}>
+                    <View style={{ flexDirection: 'row', gap: 3, width: 32 }}>
+                      {swatches.map((c) => (
+                        <View key={c} style={{ width: 14, height: 14, borderRadius: 4, backgroundColor: c }} />
+                      ))}
+                    </View>
+                    <Text style={{ flex: 1, color: t.text, fontSize: 15, fontWeight: '500' }}>{label}</Text>
+                    <View style={{
+                      width: 22, height: 22, borderRadius: 6, borderWidth: 1.5,
+                      borderColor: on ? t.accent : t.sub,
+                      backgroundColor: on ? t.accent : 'transparent',
+                      alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      {on && <Ionicons name="checkmark" size={14} color="#fff" />}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })
+            : (Object.keys(RESOURCE_GROUPS) as ResourceGroup[]).map((group, i) => {
+                const { label, color, glyph } = RESOURCE_GROUPS[group];
+                const on = resourceOn[group];
+                const loading = loadingRes[group];
+                return (
+                  <TouchableOpacity
+                    key={group}
+                    activeOpacity={0.7}
+                    disabled={loading}
+                    onPress={() => toggleResource(group)}
+                    style={{
+                      flexDirection: 'row', alignItems: 'center', gap: 12,
+                      paddingVertical: 12, paddingHorizontal: 10,
+                      borderTopWidth: i === 0 ? 0 : 1, borderTopColor: t.line,
+                    }}>
+                    <View style={{
+                      width: 22, height: 22, borderRadius: 6, backgroundColor: color,
+                      alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      <Text style={{ fontSize: 12 }}>{glyph}</Text>
+                    </View>
+                    <Text style={{ flex: 1, color: t.text, fontSize: 15, fontWeight: '500' }}>{label}</Text>
+                    {loading ? (
+                      <ActivityIndicator size="small" color={t.accent} style={{ width: 22, height: 22 }} />
+                    ) : (
+                      <View style={{
+                        width: 22, height: 22, borderRadius: 6, borderWidth: 1.5,
+                        borderColor: on ? t.accent : t.sub,
+                        backgroundColor: on ? t.accent : 'transparent',
+                        alignItems: 'center', justifyContent: 'center',
                       }}>
-                      <Text style={{ color: on ? '#FFF' : t.text, fontSize: 14, fontFamily: on ? 'Manrope_700Bold' : 'Manrope_600SemiBold' }}>{f}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-
-              {CITIES.sort((a, b) => b.count - a.count).map((a, i) => (
-                <TouchableOpacity key={i} activeOpacity={0.7}
-                  onPress={() => onMarkerPress(a.zip)}
-                  style={{
-                    flexDirection: 'row', alignItems: 'center', gap: 14,
-                    backgroundColor: t.card, borderRadius: 14,
-                    paddingVertical: 14, paddingHorizontal: 16, marginBottom: 8,
-                    borderWidth: 1.5, borderColor: t.line,
-                  }}>
-                  <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: t.fill, alignItems: 'center', justifyContent: 'center' }}>
-                    <Ionicons name="location-outline" size={16} color={t.text} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 16, color: t.text, fontFamily: 'Manrope_700Bold', letterSpacing: -0.3 }}>{a.name}</Text>
-                    <Text style={{ fontSize: 13, color: t.sub, fontFamily: 'Manrope_500Medium', marginTop: 2 }}>{a.zip} · {a.top}</Text>
-                  </View>
-                  <Text style={{ fontSize: 18, color: t.text, fontFamily: 'Manrope_800ExtraBold' }}>{a.count}</Text>
-                  <Ionicons name="chevron-forward" size={14} color={t.hint} />
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          )}
+                        {on && <Ionicons name="checkmark" size={14} color="#fff" />}
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
         </View>
-
-      </SafeAreaView>
+      </View>
     </View>
   );
 }

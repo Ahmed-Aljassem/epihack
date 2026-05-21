@@ -3,12 +3,17 @@
 // React Native ⇄ WebView protocol (messages are JSON strings):
 //   RN → Web:  { kind: 'SET_DATA', points: HeatPoint[], markers: MarkerData[] }
 //              { kind: 'TOGGLE', layer: ToggleKey, on: boolean }
+//              { kind: 'SET_RESOURCES', group: ResourceGroup, points: ResourceMarker[] }
+//              { kind: 'TOGGLE_RESOURCE', group: ResourceGroup, on: boolean }
 //   Web → RN:  { kind: 'READY' }
 // Four colored heat layers (sick/healthy/animal/environment) but THREE
 // toggles — the Human toggle drives both human (sick + healthy) layers.
+// Resource groups (cooling/hydration/respite) render as separate, toggleable
+// pin-marker layers, each styled by RESOURCE_GROUPS color + glyph.
 // Leaflet + Leaflet.heat are loaded from the unpkg CDN (needs network).
 
 import type { ReportType } from './reports';
+import { RESOURCE_GROUPS } from './resources';
 
 // The 3 panel toggles and the sub-layers each one controls.
 export type ToggleKey = ReportType; // 'human' | 'animal' | 'environment'
@@ -31,6 +36,12 @@ export const SUB_COLOR = {
 
 export function buildMapHTML(): string {
   const gradients = JSON.stringify(SUB_GRADIENTS);
+  // group -> { color, glyph } for the in-WebView resource markers.
+  const resourceStyle = JSON.stringify(
+    Object.fromEntries(
+      Object.entries(RESOURCE_GROUPS).map(([k, v]) => [k, { color: v.color, glyph: v.glyph }])
+    )
+  );
 
   return `<!DOCTYPE html>
 <html>
@@ -53,6 +64,15 @@ export function buildMapHTML(): string {
     }
     .oh-pop { font-family: -apple-system, system-ui, sans-serif; font-size: 12px; line-height: 1.5; }
     .oh-pop b { font-size: 13px; }
+    .oh-resource { background: none; border: none; }
+    .oh-resource > div {
+      width: 30px; height: 30px; border-radius: 15px 15px 15px 2px;
+      transform: rotate(-45deg);
+      color: #fff; font-size: 15px; line-height: 1;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.4); border: 2px solid #fff;
+    }
+    .oh-resource > div > span { transform: rotate(45deg); }
   </style>
 </head>
 <body>
@@ -72,6 +92,11 @@ export function buildMapHTML(): string {
 
     var enabled = { human: true, animal: true, environment: true };
     var markerData = [];
+
+    // Heat-relief resource groups (cooling/hydration/respite).
+    var RESOURCE_STYLE = ${resourceStyle}; // { group: { color, glyph }, ... }
+    var resourceLayers = {};  // group -> L.layerGroup (added to map only when enabled)
+    var resourceData = {};    // group -> ResourceMarker[]
 
     var map = L.map('map', { zoomControl: true, attributionControl: true })
       .setView([34.2, -111.6], 6);
@@ -155,11 +180,59 @@ export function buildMapHTML(): string {
       renderMarkers();
     }
 
+    function esc(s) {
+      return String(s == null ? '' : s).replace(/[&<>]/g, function (c) {
+        return c === '&' ? '&amp;' : c === '<' ? '&lt;' : '&gt;';
+      });
+    }
+
+    // (Re)build a resource group's marker layer from its points. Stores the
+    // group as a detached L.layerGroup; toggleResource adds/removes it from map.
+    function setResources(group, points) {
+      var style = RESOURCE_STYLE[group];
+      if (!style) return;
+      resourceData[group] = points || [];
+
+      var wasOn = resourceLayers[group] && map.hasLayer(resourceLayers[group]);
+      if (resourceLayers[group]) map.removeLayer(resourceLayers[group]);
+
+      var lg = L.layerGroup();
+      resourceData[group].forEach(function (r) {
+        var marker = L.marker([r.lat, r.lng], {
+          icon: L.divIcon({
+            className: 'oh-resource',
+            html: '<div style="background:' + style.color + '"><span>' + style.glyph + '</span></div>',
+            iconSize: [30, 30],
+            iconAnchor: [15, 28],
+            popupAnchor: [0, -26]
+          })
+        });
+        var html = '<div class="oh-pop"><b>' + esc(r.name) + '</b>' +
+          (r.address ? '<br/>' + esc(r.address) : '') +
+          (r.city ? '<br/>' + esc(r.city) : '') +
+          (r.hours ? '<br/>Hours: ' + esc(r.hours) : '') +
+          (r.county ? '<br/><span style="opacity:.55">' + esc(r.county) + ' County</span>' : '') + '</div>';
+        marker.bindPopup(html);
+        lg.addLayer(marker);
+      });
+
+      resourceLayers[group] = lg;
+      if (wasOn) map.addLayer(lg); // preserve visibility across data refresh
+    }
+
+    function toggleResource(group, on) {
+      var lg = resourceLayers[group];
+      if (!lg) return;
+      if (on) { map.addLayer(lg); } else { map.removeLayer(lg); }
+    }
+
     function handleMessage(raw) {
       try {
         var msg = JSON.parse(raw);
         if (msg.kind === 'SET_DATA') setData(msg.points, msg.markers);
         else if (msg.kind === 'TOGGLE') toggle(msg.layer, msg.on);
+        else if (msg.kind === 'SET_RESOURCES') setResources(msg.group, msg.points);
+        else if (msg.kind === 'TOGGLE_RESOURCE') toggleResource(msg.group, msg.on);
       } catch (e) {}
     }
 
