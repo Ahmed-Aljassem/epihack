@@ -6,6 +6,7 @@ import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import { getUserProfile, getReportStats, getMyReports, clearAuth, getNotifsOn, setNotifsOn, SavedReport, getLang, setLang, getThemeMode, setThemeMode } from '@/utils/storage';
 import { useLang, updateLang } from '@/utils/i18n';
+import { useAuth } from '@/context/AuthContext';
 
 const t = {
   bg: '#FAFAFA', card: '#FFFFFF', text: '#111', sub: '#888',
@@ -17,6 +18,7 @@ const LANG_MAP: Record<string, string> = { EN: 'English', ES: 'Español', TO: "O
 const THEME_MAP: Record<string, string> = { light: 'Light', dark: 'Dark', auto: 'Auto' };
 
 export default function ProfileScreen() {
+  const { user, signOut } = useAuth();
   const [profile, setProfile] = useState<{ name: string | null; email: string | null; token: string | null }>({ name: null, email: null, token: null });
   const [stats, setStats] = useState({ count: 0, streak: 0 });
   const [reports, setReports] = useState<SavedReport[]>([]);
@@ -32,8 +34,8 @@ export default function ProfileScreen() {
     setThemeState(await getThemeMode());
   }, []);
 
-  useEffect(() => { load(); }, []);
-  const isLoggedIn = !!profile.token;
+  useEffect(() => { load(); }, [user]);
+  const isLoggedIn = !!user;
 
   const pick = (title: string, labels: string[], keys: string[], setter: (k: string) => void, saver: (k: string) => Promise<void>) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -52,7 +54,7 @@ export default function ProfileScreen() {
 
   const handleLogout = async () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-    await clearAuth();
+    await signOut();
     setProfile({ name: null, email: null, token: null });
   };
 

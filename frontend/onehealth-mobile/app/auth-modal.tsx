@@ -1,12 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView, Animated } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView, Animated, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
-import Svg, { Path } from 'react-native-svg';
-import { setAuth } from '@/utils/storage';
+import { useAuth } from '@/context/AuthContext';
+
+const API_BASE = 'https://jimgh22yohvh6gpfilo4bcqxp40huyhw.lambda-url.us-east-2.on.aws';
+const CLIENT_ID = '6mbhoc1p6d1egrfq4o2hu2a9sc';
 
 const t = {
   bg: '#FAFAFA', card: '#FFFFFF', text: '#111', sub: '#888',
@@ -15,13 +17,29 @@ const t = {
   inv: '#FFF',
 };
 
+type AuthMode = 'signin' | 'signup' | 'confirm';
+
+/** Returns true when the string looks like a phone number */
+const isPhone = (v: string) => /^\+?\d[\d\s\-().]{6,}$/.test(v.trim());
+
 export default function AuthModal() {
   const { mode: initialMode } = useLocalSearchParams<{ mode: string }>();
-  const [email, setEmail] = useState('');
-  const [pass, setPass] = useState('');
-  const [showPass, setShowPass] = useState(false);
-  const canSubmit = email.includes('@') && pass.length >= 4;
+  const { signInUser } = useAuth();
 
+  // ─── State ──────────────────────────────────────────
+  const [authMode, setAuthMode] = useState<AuthMode>(initialMode === 'signin' ? 'signin' : 'signup');
+  const [identity, setIdentity] = useState(''); // email OR phone
+  const [pass, setPass] = useState('');
+  const [name, setName] = useState('');
+  const [showPass, setShowPass] = useState(false);
+  const [loading, setLoading] = useState(false);
+  
+  // Confirmation code
+  const [otpCode, setOtpCode] = useState('');
+
+  const detectedPhone = isPhone(identity);
+
+  // ─── Animations ─────────────────────────────────────
   const fadeIn = useRef(new Animated.Value(0)).current;
   const slideUp = useRef(new Animated.Value(16)).current;
 
@@ -32,17 +50,126 @@ export default function AuthModal() {
     ]).start();
   }, []);
 
-  const handleSubmit = async () => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    await setAuth('token-' + Date.now(), 'Reporter', email);
-    router.back();
+  // ─── Validation ─────────────────────────────────────
+  const emailValid = identity.includes('@') && identity.includes('.');
+  const passValid = pass.length >= 6;
+
+  const canSubmit = emailValid && passValid && (authMode === 'signin' || name.trim().length > 0);
+  const canVerifyOtp = otpCode.length === 6;
+
+  // ─── Email Auth ─────────────────────────────────────
+  const handleAuth = async () => {
+    setLoading(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    try {
+      if (authMode === 'signup') {
+        const res = await fetch(`${API_BASE}/auth/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            client_id: CLIENT_ID,
+            email: identity.trim(),
+            password: pass,
+            name: name,
+            role: 'citizen',
+            phone_number: '+15555555555' // backend requires this optionally, maybe mock it if not provided
+          }),
+        });
+        
+        if (!res.ok) {
+          const errorData = await res.json();
+          throw new Error(errorData.detail?.[0]?.msg || errorData.detail || 'Registration failed');
+        }
+
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setAuthMode('confirm');
+      } else if (authMode === 'signin') {
+        const res = await fetch(`${API_BASE}/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            client_id: CLIENT_ID,
+            email: identity.trim(),
+            password: pass,
+          }),
+        });
+
+        if (!res.ok) {
+          const errorData = await res.json();
+          throw new Error(errorData.detail?.[0]?.msg || errorData.detail || 'Login failed');
+        }
+
+        const data = await res.json();
+        await signInUser(data.access_token || 'token', 'Reporter', identity.trim());
+
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        router.back();
+      }
+    } catch (err: any) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Error', err.message || 'Something went wrong');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const skip = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.back();
+  const handleVerifyConfirm = async () => {
+    setLoading(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    try {
+      const res = await fetch(`${API_BASE}/auth/confirm`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          client_id: CLIENT_ID,
+          email: identity.trim(),
+          code: otpCode,
+        }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.detail?.[0]?.msg || errorData.detail || 'Confirmation failed');
+      }
+      
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      // Automatically login after confirm
+      const loginRes = await fetch(`${API_BASE}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          client_id: CLIENT_ID,
+          email: identity.trim(),
+          password: pass,
+        }),
+      });
+      if (loginRes.ok) {
+        const data = await loginRes.json();
+        await signInUser(data.access_token || 'token', name, identity.trim());
+        router.back();
+      } else {
+        setAuthMode('signin');
+      }
+
+    } catch (err: any) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Error', err.message || 'Invalid code');
+    } finally {
+      setLoading(false);
+    }
   };
 
+
+  const skip = () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.back(); };
+
+  // ─── Shared Styles ──────────────────────────────────
+  const inputBox = (mb = 12) => ({
+    backgroundColor: t.card, borderRadius: 14, paddingHorizontal: 16,
+    flexDirection: 'row' as const, alignItems: 'center' as const, marginBottom: mb,
+  });
+  const inputStyle = { flex: 1, color: t.text, fontSize: 16, paddingVertical: 16, fontFamily: 'Manrope_500Medium' };
+
+  // ─── Render ─────────────────────────────────────────
   return (
     <View style={{ flex: 1, backgroundColor: t.bg }}>
       <StatusBar style="dark" />
@@ -51,85 +178,131 @@ export default function AuthModal() {
           <ScrollView contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 28 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
             <Animated.View style={{ opacity: fadeIn, transform: [{ translateY: slideUp }], flex: 1 }}>
 
-              {/* Skip at top */}
+              {/* Skip */}
               <TouchableOpacity activeOpacity={0.7} onPress={skip} style={{ alignSelf: 'flex-end', marginTop: 8, paddingVertical: 8, paddingLeft: 16 }}>
                 <Text style={{ color: t.sub, fontSize: 14, fontFamily: 'Manrope_500Medium' }}>Skip</Text>
               </TouchableOpacity>
 
               {/* Logo */}
-              <View style={{ alignItems: 'center', marginTop: 32, marginBottom: 48 }}>
-                <Text style={{ fontFamily: 'Manrope_400Regular',  fontSize: 36, letterSpacing: -1.2 }}>
+              <View style={{ alignItems: 'center', marginTop: 32, marginBottom: 40 }}>
+                <Text style={{ fontFamily: 'Manrope_400Regular', fontSize: 36, letterSpacing: -1.2 }}>
                   <Text style={{ color: t.hint, fontFamily: 'Manrope_300Light' }}>One</Text>
                   <Text style={{ color: t.accent, fontFamily: 'Manrope_800ExtraBold' }}>Health</Text>
                 </Text>
+                <Text style={{ fontFamily: 'Manrope_400Regular', fontSize: 14, color: t.sub, marginTop: 8 }}>
+                  {authMode === 'signup' ? 'Create your account' : (authMode === 'signin' ? 'Welcome back' : 'Verify your email')}
+                </Text>
               </View>
 
-              {/* Email */}
-              <View style={{
-                backgroundColor: t.card, borderRadius: 14, paddingHorizontal: 16,
-                flexDirection: 'row', alignItems: 'center', marginBottom: 12,
-                borderWidth: 1.5, borderColor: 'transparent'
-              }}>
-                <Ionicons name="mail-outline" size={18} color={t.hint} style={{ marginRight: 10 }} />
-                <TextInput style={{ flex: 1, color: t.text, fontSize: 16, paddingVertical: 16, fontFamily: 'Manrope_500Medium' }}
-                  placeholder="Email" placeholderTextColor={t.hint}
-                  value={email} onChangeText={setEmail}
-                  keyboardType="email-address" autoCapitalize="none" autoCorrect={false} />
-              </View>
+              {/* ─────────────────── OTP VERIFY SCREEN ─────────────────── */}
+              {authMode === 'confirm' ? (
+                <>
+                  <View style={{ alignItems: 'center', marginBottom: 24 }}>
+                    <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: t.accentSoft, alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
+                      <Ionicons name="mail-outline" size={22} color={t.accent} />
+                    </View>
+                    <Text style={{ color: t.text, fontSize: 16, fontFamily: 'Manrope_600SemiBold' }}>Enter the 6-digit code</Text>
+                    <Text style={{ color: t.sub, fontSize: 13, fontFamily: 'Manrope_400Regular', marginTop: 4 }}>Sent to {identity}</Text>
+                  </View>
 
-              {/* Password */}
-              <View style={{
-                backgroundColor: t.card, borderRadius: 14, paddingHorizontal: 16,
-                flexDirection: 'row', alignItems: 'center', marginBottom: 24,
-                borderWidth: 1.5, borderColor: 'transparent'
-              }}>
-                <Ionicons name="lock-closed-outline" size={18} color={t.hint} style={{ marginRight: 10 }} />
-                <TextInput style={{ flex: 1, color: t.text, fontSize: 16, paddingVertical: 16, fontFamily: 'Manrope_500Medium' }}
-                  placeholder="Password" placeholderTextColor={t.hint}
-                  value={pass} onChangeText={setPass}
-                  secureTextEntry={!showPass} autoCapitalize="none" />
-                <TouchableOpacity onPress={() => setShowPass(p => !p)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                  <Ionicons name={showPass ? 'eye-off-outline' : 'eye-outline'} size={20} color={t.hint} />
-                </TouchableOpacity>
-              </View>
+                  <View style={inputBox(24)}>
+                    <Ionicons name="keypad-outline" size={18} color={t.hint} style={{ marginRight: 10 }} />
+                    <TextInput style={{ ...inputStyle, letterSpacing: 8, textAlign: 'center', fontSize: 22, fontFamily: 'Manrope_700Bold' }}
+                      placeholder="000000" placeholderTextColor={t.hint}
+                      value={otpCode} onChangeText={v => setOtpCode(v.replace(/\D/g, '').slice(0, 6))}
+                      keyboardType="number-pad" autoFocus />
+                  </View>
 
-              {/* Sign In */}
-              <TouchableOpacity activeOpacity={0.8} onPress={handleSubmit} disabled={!canSubmit} style={{
-                backgroundColor: canSubmit ? t.accent : t.fill, borderRadius: 14, paddingVertical: 16, alignItems: 'center',
-              }}>
-                <Text style={{ color: canSubmit ? t.inv : t.hint, fontSize: 16, fontFamily: 'Manrope_600SemiBold' }}>Sign In</Text>
-              </TouchableOpacity>
+                  <TouchableOpacity activeOpacity={0.8} onPress={handleVerifyConfirm} disabled={!canVerifyOtp || loading}
+                    style={{
+                      backgroundColor: canVerifyOtp ? t.accent : t.fill, borderRadius: 14, paddingVertical: 16,
+                      alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8,
+                    }}>
+                    {loading && <ActivityIndicator size="small" color={canVerifyOtp ? t.inv : t.hint} />}
+                    <Text style={{ color: canVerifyOtp ? t.inv : t.hint, fontSize: 16, fontFamily: 'Manrope_600SemiBold' }}>Verify & Sign In</Text>
+                  </TouchableOpacity>
 
-              {/* Divider */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 24 }}>
-                <View style={{ flex: 1, height: 1, backgroundColor: t.line }} />
-                <Text style={{ fontFamily: 'Manrope_400Regular',  color: t.hint, fontSize: 12, marginHorizontal: 14 }}>or</Text>
-                <View style={{ flex: 1, height: 1, backgroundColor: t.line }} />
-              </View>
+                  <TouchableOpacity onPress={() => { setAuthMode('signup'); setOtpCode(''); }} style={{ alignSelf: 'center', marginTop: 16 }}>
+                    <Text style={{ color: t.accent, fontSize: 13, fontFamily: 'Manrope_500Medium' }}>Change email</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <>
+                  {/* ─────────────────── MAIN FORM ─────────────────── */}
 
-              {/* Social icons + Anonymous */}
-              <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 16 }}>
-                <TouchableOpacity activeOpacity={0.7} onPress={handleSubmit} style={{
-                  width: 56, height: 56, borderRadius: 16, backgroundColor: t.card,
-                  alignItems: 'center', justifyContent: 'center',
-                }}>
-                  <Ionicons name="logo-apple" size={24} color={t.text} />
-                </TouchableOpacity>
-                <TouchableOpacity activeOpacity={0.7} onPress={handleSubmit} style={{
-                  width: 56, height: 56, borderRadius: 16, backgroundColor: t.card,
-                  alignItems: 'center', justifyContent: 'center',
-                }}>
-                  <Ionicons name="logo-google" size={22} color={t.text} />
-                </TouchableOpacity>
-                <TouchableOpacity activeOpacity={0.7} onPress={handleSubmit} style={{
-                  width: 56, height: 56, borderRadius: 16, backgroundColor: t.card,
-                  alignItems: 'center', justifyContent: 'center',
-                }}>
-                  <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
-                    <Path d="M17.5,12 C19.9852814,12 22,14.0147186 22,16.5 C22,18.9852814 19.9852814,21 17.5,21 C15.3591076,21 13.5674006,19.5049595 13.1119514,17.5019509 L10.8880486,17.5019509 C10.4325994,19.5049595 8.64089238,21 6.5,21 C4.01471863,21 2,18.9852814 2,16.5 C2,14.0147186 4.01471863,12 6.5,12 C8.81637876,12 10.7239814,13.7501788 10.9725684,16.000297 L13.0274316,16.000297 C13.2760186,13.7501788 15.1836212,12 17.5,12 Z M6.5,13.5 C4.84314575,13.5 3.5,14.8431458 3.5,16.5 C3.5,18.1568542 4.84314575,19.5 6.5,19.5 C8.15685425,19.5 9.5,18.1568542 9.5,16.5 C9.5,14.8431458 8.15685425,13.5 6.5,13.5 Z M17.5,13.5 C15.8431458,13.5 14.5,14.8431458 14.5,16.5 C14.5,18.1568542 15.8431458,19.5 17.5,19.5 C19.1568542,19.5 20.5,18.1568542 20.5,16.5 C20.5,14.8431458 19.1568542,13.5 17.5,13.5 Z M12,9.25 C15.3893368,9.25 18.5301001,9.58954198 21.4217795,10.2699371 C21.8249821,10.3648083 22.0749341,10.7685769 21.9800629,11.1717795 C21.8851917,11.5749821 21.4814231,11.8249341 21.0782205,11.7300629 C18.3032332,11.0771247 15.2773298,10.75 12,10.75 C8.72267018,10.75 5.69676679,11.0771247 2.9217795,11.7300629 C2.51857691,11.8249341 2.11480832,11.5749821 2.01993712,11.1717795 C1.92506593,10.7685769 2.17501791,10.3648083 2.5782205,10.2699371 C5.46989988,9.58954198 8.61066315,9.25 12,9.25 Z M15.7002538,3.25 C16.7230952,3.25 17.6556413,3.81693564 18.1297937,4.71158956 L18.2132356,4.88311922 L19.6853587,8.19539615 C19.8535867,8.57390929 19.683117,9.0171306 19.3046038,9.18535866 C18.9576335,9.33956772 18.5562903,9.20917654 18.3622308,8.89482229 L18.3146413,8.80460385 L16.8425183,5.49232692 C16.6601304,5.08195418 16.2735894,4.80422037 15.8336777,4.75711483 L15.7002538,4.75 L8.29974618,4.75 C7.85066809,4.75 7.43988259,4.99042719 7.21817192,5.37329225 L7.15748174,5.49232692 L5.68535866,8.80460385 C5.5171306,9.18311699 5.07390929,9.35358672 4.69539615,9.18535866 C4.34842577,9.03114961 4.17626965,8.64586983 4.27956492,8.29117594 L4.31464134,8.19539615 L5.78676442,4.88311922 C6.20217965,3.94843495 7.09899484,3.32651789 8.10911143,3.25658537 L8.29974618,3.25 L15.7002538,3.25 Z" fill={t.text} fillRule="nonzero" />
-                  </Svg>
-                </TouchableOpacity>
-              </View>
+                  {/* Name (signup only, email only) */}
+                  {authMode === 'signup' && (
+                    <View style={inputBox()}>
+                      <Ionicons name="person-outline" size={18} color={t.hint} style={{ marginRight: 10 }} />
+                      <TextInput style={inputStyle}
+                        placeholder="Full name" placeholderTextColor={t.hint}
+                        value={name} onChangeText={setName}
+                        autoCapitalize="words" autoCorrect={false} />
+                    </View>
+                  )}
+
+                  {/* Email */}
+                  <View style={inputBox()}>
+                    <Ionicons name="mail-outline" size={18} color={t.hint} style={{ marginRight: 10 }} />
+                    <TextInput style={inputStyle}
+                      placeholder="Email" placeholderTextColor={t.hint}
+                      value={identity} onChangeText={setIdentity}
+                      keyboardType="email-address" autoCapitalize="none" autoCorrect={false} />
+                  </View>
+
+                  {/* Password */}
+                  <View style={inputBox(4)}>
+                    <Ionicons name="lock-closed-outline" size={18} color={t.hint} style={{ marginRight: 10 }} />
+                    <TextInput style={inputStyle}
+                      placeholder="Password" placeholderTextColor={t.hint}
+                      value={pass} onChangeText={setPass}
+                      secureTextEntry={!showPass} autoCapitalize="none" />
+                    <TouchableOpacity onPress={() => setShowPass(p => !p)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                      <Ionicons name={showPass ? 'eye-off-outline' : 'eye-outline'} size={20} color={t.hint} />
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Hint text */}
+                  {identity.length > 3 && (
+                    <Text style={{ color: t.hint, fontSize: 11, fontFamily: 'Manrope_400Regular', marginBottom: 20, marginTop: 4, marginLeft: 4 }}>
+                      {passValid ? '' : 'Password must be at least 6 characters'}
+                    </Text>
+                  )}
+
+                  {/* Submit */}
+                  <TouchableOpacity activeOpacity={0.8}
+                    onPress={handleAuth}
+                    disabled={!canSubmit || loading}
+                    style={{
+                      backgroundColor: canSubmit ? t.accent : t.fill, borderRadius: 14, paddingVertical: 16,
+                      alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8, marginTop: 4,
+                    }}>
+                    {loading && <ActivityIndicator size="small" color={canSubmit ? t.inv : t.hint} />}
+                    <Text style={{ color: canSubmit ? t.inv : t.hint, fontSize: 16, fontFamily: 'Manrope_600SemiBold' }}>
+                      {authMode === 'signup' ? 'Create Account' : 'Sign In'}
+                    </Text>
+                  </TouchableOpacity>
+
+                  {/* ─── Toggle Sign In / Sign Up ─── */}
+                  <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 32, gap: 4 }}>
+                    <Text style={{ color: t.sub, fontSize: 14, fontFamily: 'Manrope_400Regular' }}>
+                      {authMode === 'signup' ? 'Already have an account?' : "Don't have an account?"}
+                    </Text>
+                    <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setAuthMode(m => m === 'signup' ? 'signin' : 'signup'); }}>
+                      <Text style={{ color: t.accent, fontSize: 14, fontFamily: 'Manrope_600SemiBold' }}>
+                        {authMode === 'signup' ? 'Sign In' : 'Sign Up'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Footer */}
+                  <View style={{ alignItems: 'center', marginTop: 24, marginBottom: 20 }}>
+                    <Text style={{ color: t.hint, fontSize: 11, fontFamily: 'Manrope_400Regular', textAlign: 'center', lineHeight: 16 }}>
+                      By continuing, you agree to OneHealth's{'\n'}Terms of Service and Privacy Policy
+                    </Text>
+                  </View>
+                </>
+              )}
 
             </Animated.View>
           </ScrollView>
