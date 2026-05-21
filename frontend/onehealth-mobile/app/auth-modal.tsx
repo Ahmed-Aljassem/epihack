@@ -135,8 +135,11 @@ export default function AuthModal() {
               </TouchableOpacity>
 
               <TouchableOpacity activeOpacity={0.7} onPress={() => setIsSignUp(!isSignUp)} style={{ marginTop: 16, alignItems: 'center' }}>
-                <Text style={{ color: t.accent, fontSize: 14, fontFamily: 'Manrope_600SemiBold' }}>
-                  {isSignUp ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}
+                <Text style={{ color: t.sub, fontSize: 14, fontFamily: 'Manrope_500Medium' }}>
+                  {isSignUp ? 'Already have an account? ' : "Don't have an account? "}
+                  <Text style={{ color: t.accent, fontFamily: 'Manrope_600SemiBold' }}>
+                    {isSignUp ? 'Sign In' : 'Sign Up'}
+                  </Text>
                 </Text>
               </TouchableOpacity>
 
