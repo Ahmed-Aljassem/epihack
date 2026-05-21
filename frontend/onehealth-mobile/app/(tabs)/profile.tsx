@@ -6,6 +6,7 @@ import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import { getUserProfile, getReportStats, getMyReports, clearAuth, getNotifsOn, setNotifsOn, SavedReport, getLang, setLang, getThemeMode, setThemeMode } from '@/utils/storage';
 import { useLang, updateLang } from '@/utils/i18n';
+import { supabase } from '@/utils/supabase';
 
 const t = {
   bg: '#FAFAFA', card: '#FFFFFF', text: '#111', sub: '#888',
@@ -17,7 +18,7 @@ const LANG_MAP: Record<string, string> = { EN: 'English', ES: 'Español', TO: "O
 const THEME_MAP: Record<string, string> = { light: 'Light', dark: 'Dark', auto: 'Auto' };
 
 export default function ProfileScreen() {
-  const [profile, setProfile] = useState<{ name: string | null; email: string | null; token: string | null }>({ name: null, email: null, token: null });
+  const [profile, setProfile] = useState<{ name: string | null; email: string | null; token: string | null; phone: string | null; age: string | null; profession: string | null; pets: string | null }>({ name: null, email: null, token: null, phone: null, age: null, profession: null, pets: null });
   const [stats, setStats] = useState({ count: 0, streak: 0 });
   const [reports, setReports] = useState<SavedReport[]>([]);
   const [notifsOn, setNotifsState] = useState(true);
@@ -25,15 +26,46 @@ export default function ProfileScreen() {
   const [theme, setThemeState] = useState('light');
 
   const load = useCallback(async () => {
-    setProfile(await getUserProfile());
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+      const meta = session.user.user_metadata || {};
+      setProfile({
+        name: meta.full_name || 'Reporter',
+        email: session.user.email || null,
+        token: session.access_token,
+        phone: meta.phone_number || null,
+        age: meta.age || null,
+        profession: meta.profession || null,
+        pets: meta.pets || null,
+      });
+    } else {
+      setProfile({ name: null, email: null, token: null, phone: null, age: null, profession: null, pets: null });
+    }
+    
     setStats(await getReportStats());
     setReports(await getMyReports());
     setNotifsState(await getNotifsOn());
     setThemeState(await getThemeMode());
   }, []);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { 
+    load(); 
+    const { data: authListener } = supabase.auth.onAuthStateChange(() => load());
+    return () => { authListener.subscription.unsubscribe(); };
+  }, [load]);
+  
   const isLoggedIn = !!profile.token;
+
+  const editField = (field: string, title: string, placeholder: string, keyboardType: any = 'default') => {
+    Alert.prompt(title, '', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Save', onPress: async (val) => {
+        if (!val) return;
+        await supabase.auth.updateUser({ data: { [field]: val } });
+        load();
+      }}
+    ], 'plain-text', '', keyboardType);
+  };
 
   const pick = (title: string, labels: string[], keys: string[], setter: (k: string) => void, saver: (k: string) => Promise<void>) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -52,8 +84,9 @@ export default function ProfileScreen() {
 
   const handleLogout = async () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    await supabase.auth.signOut();
     await clearAuth();
-    setProfile({ name: null, email: null, token: null });
+    load();
   };
 
   const SLabel = ({ children, icon }: { children: string; icon?: keyof typeof Ionicons.glyphMap }) => (
@@ -129,6 +162,17 @@ export default function ProfileScreen() {
               {stats.streak > 0 ? `${stats.streak} week streak` : 'Start reporting weekly'}
             </Text>
           </View>
+
+          {/* Personal Info */}
+          {isLoggedIn && (
+            <>
+              <SLabel icon="person-outline">Personal Info</SLabel>
+              <Row icon="call-outline" label="Phone Number" right={profile.phone || 'Add'} onPress={() => editField('phone_number', 'Phone Number', 'e.g. 555-1234', 'phone-pad')} />
+              <Row icon="calendar-outline" label="Age" right={profile.age || 'Add'} onPress={() => editField('age', 'Age', 'e.g. 35', 'number-pad')} />
+              <Row icon="briefcase-outline" label="Profession" right={profile.profession || 'Add'} onPress={() => editField('profession', 'Profession', 'e.g. Teacher')} />
+              <Row icon="paw-outline" label="Number of Pets" right={profile.pets || 'Add'} onPress={() => editField('pets', 'Number of Pets', 'e.g. 2', 'number-pad')} />
+            </>
+          )}
 
           {/* Recent Reports */}
           <SLabel icon="time-outline">{loc.p_rec}</SLabel>

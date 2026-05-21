@@ -20,10 +20,11 @@ export default function AuthModal() {
   const { mode: initialMode } = useLocalSearchParams<{ mode: string }>();
   const [email, setEmail] = useState('');
   const [pass, setPass] = useState('');
+  const [name, setName] = useState('');
   const [showPass, setShowPass] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
   const [loading, setLoading] = useState(false);
-  const canSubmit = email.includes('@') && pass.length >= 6;
+  const canSubmit = email.includes('@') && pass.length >= 6 && (!isSignUp || name.trim().length > 1);
 
   const fadeIn = useRef(new Animated.Value(0)).current;
   const slideUp = useRef(new Animated.Value(16)).current;
@@ -44,6 +45,7 @@ export default function AuthModal() {
         const { error } = await supabase.auth.signUp({
           email,
           password: pass,
+          options: { data: { full_name: name.trim() } }
         });
         if (error) throw error;
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -95,6 +97,21 @@ export default function AuthModal() {
                   <Text style={{ color: t.accent, fontFamily: 'Manrope_800ExtraBold' }}>Health</Text>
                 </Text>
               </View>
+
+              {/* Name (Sign Up Only) */}
+              {isSignUp && (
+                <View style={{
+                  backgroundColor: t.card, borderRadius: 14, paddingHorizontal: 16,
+                  flexDirection: 'row', alignItems: 'center', marginBottom: 12,
+                  borderWidth: 1.5, borderColor: 'transparent'
+                }}>
+                  <Ionicons name="person-outline" size={18} color={t.hint} style={{ marginRight: 10 }} />
+                  <TextInput style={{ flex: 1, color: t.text, fontSize: 16, paddingVertical: 16, fontFamily: 'Manrope_500Medium' }}
+                    placeholder="Full Name" placeholderTextColor={t.hint}
+                    value={name} onChangeText={setName}
+                    autoCapitalize="words" autoCorrect={false} />
+                </View>
+              )}
 
               {/* Email */}
               <View style={{
