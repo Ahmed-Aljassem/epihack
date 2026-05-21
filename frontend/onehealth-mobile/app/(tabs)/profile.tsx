@@ -153,15 +153,6 @@ export default function ProfileScreen() {
             )}
           </View>
 
-          {/* Stats */}
-          <SLabel icon="trophy-outline">{loc.p_impact}</SLabel>
-          <View style={{ backgroundColor: t.card, borderRadius: 14, paddingVertical: 18, alignItems: 'center' }}>
-            <Text style={{ color: t.hint, fontSize: 10, fontFamily: 'Manrope_600SemiBold', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4 }}>{loc.rep_sub}</Text>
-            <Text style={{ color: t.text, fontSize: 32, fontFamily: 'Manrope_700Bold' }}>{stats.count}</Text>
-            <Text style={{ fontFamily: 'Manrope_400Regular',  color: t.sub, fontSize: 12, marginTop: 4 }}>
-              {stats.streak > 0 ? `${stats.streak} week streak` : 'Start reporting weekly'}
-            </Text>
-          </View>
 
           {/* Personal Info */}
           {isLoggedIn && (
