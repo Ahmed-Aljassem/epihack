@@ -15,10 +15,10 @@ class UserRole(str, Enum):
 
 
 class SurveyCategory(str, Enum):
-    HUMAN = "human"        # human illness symptoms
-    ANIMAL = "animal"      # livestock / wildlife health
+    HUMAN = "human"              # human illness symptoms
+    ANIMAL = "animal"            # livestock / wildlife health
     ENVIRONMENT = "environment"  # water, soil, air anomalies
-    VECTOR = "vector"      # mosquito / tick / rodent activity
+    VECTOR = "vector"            # mosquito / tick / rodent activity
 
 
 class SurveyStatus(str, Enum):
@@ -50,3 +50,29 @@ class QuestionType(str, Enum):
     BOOLEAN = "boolean"
     DATE = "date"
     GEO = "geo"              # coordinates capture
+
+
+# ── Report-specific enums ─────────────────────────────────────────
+
+class ReportType(str, Enum):
+    """One Health domain — mirrors SurveyCategory but used on free-form reports."""
+    HUMAN = "human"
+    ANIMAL = "animal"
+    ENVIRONMENT = "environment"
+    VECTOR = "vector"
+
+
+class Sex(str, Enum):
+    MALE = "male"
+    FEMALE = "female"
+    OTHER = "other"
+    PREFER_NOT_TO_SAY = "prefer_not_to_say"
+
+
+class RiskLevel(str, Enum):
+    """Composite risk computed per geographic cluster."""
+    NONE = "none"
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
