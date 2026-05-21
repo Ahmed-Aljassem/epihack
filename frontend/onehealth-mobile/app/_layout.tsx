@@ -11,7 +11,6 @@ import {
   Manrope_700Bold,
   Manrope_800ExtraBold 
 } from '@expo-google-fonts/manrope';
-import { AuthProvider } from '@/context/AuthContext';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -40,7 +39,7 @@ export default function RootLayout() {
   }
 
   return (
-    <AuthProvider>
+    <>
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
@@ -51,7 +50,6 @@ export default function RootLayout() {
         <Stack.Screen name="compose" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
         <Stack.Screen name="auth-modal" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
       </Stack>
-    </AuthProvider>
+    </>
   );
 }
-
