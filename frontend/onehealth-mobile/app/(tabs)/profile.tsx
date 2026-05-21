@@ -84,9 +84,13 @@ export default function ProfileScreen() {
 
   const handleLogout = async () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {
+      console.log('Sign out error:', e);
+    }
     await clearAuth();
-    load();
+    setProfile({ name: null, email: null, token: null, phone: null, age: null, profession: null, pets: null });
   };
 
   const SLabel = ({ children, icon }: { children: string; icon?: keyof typeof Ionicons.glyphMap }) => (
