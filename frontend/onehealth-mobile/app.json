@@ -9,7 +9,17 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.vaishnav.onehealthmobile",
+      "infoPlist": {
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": [
+              "com.googleusercontent.apps.438598321490-v7i27fagkep973bm456442g63v8pcuqe"
+            ]
+          }
+        ]
+      }
     },
     "android": {
       "adaptiveIcon": {

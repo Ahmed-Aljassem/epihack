@@ -10,6 +10,7 @@ import * as Haptics from 'expo-haptics';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
+import { getLang, setLang as setStorageLang } from '@/utils/storage';
 
 // ─── Theme — matches OneHealth splash ────────────────────────
 const P = {
@@ -28,7 +29,7 @@ const P = {
     inv: '#FFF', green: '#4CAF50', bar: 'light' as const,
   },
 };
-type Th = any;
+type Th = typeof P.light;
 
 function uid() {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
@@ -155,13 +156,18 @@ const I18N = {
 };
 
 // ─────────────────────────────────────────────────────────────
-export default function ReportFlow({ onSignUp }: { onSignUp?: () => void }) {
+export default function ReportFlow({ onSignUp, onSubmitComplete }: { onSignUp?: () => void; onSubmitComplete?: () => void }) {
   const sys = useColorScheme();
   const [mode, setMode] = useState<'light' | 'dark'>('light');
   const t = P[mode];
 
-  const [lang, setLang] = useState<'EN' | 'ES' | 'TO'>('EN');
+  const [lang, setLangState] = useState<'EN' | 'ES' | 'TO'>('EN');
   const loc = I18N[lang];
+  
+  useEffect(() => {
+    getLang().then(l => setLangState(l as 'EN' | 'ES' | 'TO'));
+  }, []);
+
   const [showSettings, setShowSettings] = useState(false);
   const settingsAnim = useRef(new Animated.Value(0)).current;
 
@@ -194,29 +200,37 @@ export default function ReportFlow({ onSignUp }: { onSignUp?: () => void }) {
 
   const fa = useRef(new Animated.Value(1)).current;
   const sl = useRef(new Animated.Value(0)).current;
+  const stepRef = useRef(step);
+  stepRef.current = step;
 
   // Dynamic steps based on feeling
   const steps = feeling === 'sick'
-    ? ['feeling', 'category', 'symptoms', 'assessment', 'done']
-    : ['feeling', 'category', 'observations', 'done'];
+    ? ['feeling', 'symptoms', 'assessment', 'done']
+    : feeling === 'good'
+      ? ['feeling', 'observations', 'done']
+      : ['feeling', 'done'];
 
   const totalSteps = steps.length;
   const currentStepName = steps[step] || 'done';
 
   const go = useCallback((n: number) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const d = n > step ? 1 : -1;
+    const d = n > stepRef.current ? 1 : -1;
     Animated.parallel([
       Animated.timing(fa, { toValue: 0, duration: 80, useNativeDriver: true }),
       Animated.timing(sl, { toValue: -14 * d, duration: 80, useNativeDriver: true }),
     ]).start(() => {
-      setStep(n); sl.setValue(14 * d);
-      Animated.parallel([
-        Animated.timing(fa, { toValue: 1, duration: 150, useNativeDriver: true }),
-        Animated.timing(sl, { toValue: 0, duration: 150, useNativeDriver: true }),
-      ]).start();
+      setStep(n);
+      sl.setValue(14 * d);
+      // Wait a short delay for React to render the new screen while invisible
+      setTimeout(() => {
+        Animated.parallel([
+          Animated.timing(fa, { toValue: 1, duration: 150, useNativeDriver: true }),
+          Animated.timing(sl, { toValue: 0, duration: 150, useNativeDriver: true }),
+        ]).start();
+      }, 50);
     });
-  }, [step]);
+  }, []);
 
   const togArr = (arr: string[], set: any, v: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -263,6 +277,7 @@ export default function ReportFlow({ onSignUp }: { onSignUp?: () => void }) {
       submitted_at: new Date().toISOString(), id: uid(),
     };
     console.log('Report:', JSON.stringify(payload, null, 2));
+    if (onSubmitComplete) onSubmitComplete();
     go(step + 1);
   };
 
@@ -276,8 +291,7 @@ export default function ReportFlow({ onSignUp }: { onSignUp?: () => void }) {
   // ── Can continue? ──
   const canContinue = () => {
     switch (currentStepName) {
-      case 'feeling': return feeling !== '';
-      case 'category': return cats.length > 0;
+      case 'feeling': return feeling !== '' && cats.length > 0;
       case 'symptoms': return symptoms.length > 0 && zip.length === 5;
       case 'assessment': return onset !== '' && severity !== '';
       case 'observations': return zip.length === 5;
@@ -323,25 +337,25 @@ export default function ReportFlow({ onSignUp }: { onSignUp?: () => void }) {
   const screen = () => {
     switch (currentStepName) {
 
-      // ── Feeling ──
+      // ── Feeling + Category (combined) ──
       case 'feeling': return (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40 }}>
           <Heading>{loc.feeling_h}</Heading>
           <Sub>{loc.feeling_s}</Sub>
 
-          <View style={{ gap: 10 }}>
+          <View style={{ flexDirection: 'row', gap: 10 }}>
             {[
-              { id: 'sick', label: loc.sick, desc: loc.sick_d, icon: 'thermometer-outline' as keyof typeof Ionicons.glyphMap },
-              { id: 'good', label: loc.good, desc: loc.good_d, icon: 'sunny-outline' as keyof typeof Ionicons.glyphMap },
-            ].map(({ id, label, desc, icon }) => {
+              { id: 'sick', label: loc.sick, icon: 'thermometer-outline' as keyof typeof Ionicons.glyphMap },
+              { id: 'good', label: loc.good, icon: 'sunny-outline' as keyof typeof Ionicons.glyphMap },
+            ].map(({ id, label, icon }) => {
               const on = feeling === id;
               return (
                 <TouchableOpacity key={id} activeOpacity={0.7}
                   onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setFeeling(id); if (id === 'sick' && !cats.includes('people')) setCats(prev => [...prev, 'people']); }}
                   style={{
-                    flexDirection: 'row', alignItems: 'center', gap: 14,
+                    flex: 1, alignItems: 'center', gap: 10,
                     backgroundColor: on ? t.accentSoft : t.card, borderRadius: 16,
-                    paddingVertical: 20, paddingHorizontal: 18,
+                    paddingVertical: 22, paddingHorizontal: 14,
                     borderWidth: 1.5, borderColor: on ? t.accent : 'transparent',
                   }}>
                   <View style={{
@@ -351,23 +365,13 @@ export default function ReportFlow({ onSignUp }: { onSignUp?: () => void }) {
                   }}>
                     <Ionicons name={icon} size={20} color={on ? t.accent : t.sub} />
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ color: t.text, fontSize: 16, fontFamily: 'Manrope_600SemiBold' }}>{label}</Text>
-                    <Text style={{ fontFamily: 'Manrope_400Regular',  color: t.sub, fontSize: 12, marginTop: 2 }}>{desc}</Text>
-                  </View>
-                  {on && <Ionicons name="checkmark-circle" size={22} color={t.accent} />}
+                  <Text style={{ color: on ? t.text : t.sub, fontSize: 15, fontFamily: 'Manrope_600SemiBold' }}>{label}</Text>
                 </TouchableOpacity>
               );
             })}
           </View>
-        </ScrollView>
-      );
 
-      // ── Category ──
-      case 'category': return (
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40 }}>
-          <Heading>{loc.cat_h}</Heading>
-          <Sub>{loc.cat_s}</Sub>
+          <Label icon="layers-outline">{loc.cat_h.replace('\n', ' ')}</Label>
 
           {[
             { id: 'people', title: loc.people, desc: loc.people_d, icon: 'person-outline' as keyof typeof Ionicons.glyphMap },
@@ -632,7 +636,7 @@ export default function ReportFlow({ onSignUp }: { onSignUp?: () => void }) {
                   const on = lang === l.id;
                   return (
                     <TouchableOpacity key={l.id} activeOpacity={0.7}
-                      onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setLang(l.id as any); setTimeout(toggleSettings, 300); }}
+                      onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setLangState(l.id as any); setStorageLang(l.id); setTimeout(toggleSettings, 300); }}
                       style={{
                         flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
                         backgroundColor: on ? t.selBg : t.fill, borderRadius: 16, paddingVertical: 16, paddingHorizontal: 20,
