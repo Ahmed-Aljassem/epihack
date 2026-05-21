@@ -81,8 +81,11 @@ export async function getReportStats(): Promise<{ count: number; streak: number 
 export async function incrementReportCount(): Promise<void> {
   const count = parseInt((await AsyncStorage.getItem(KEYS.REPORT_COUNT)) || '0', 10);
   const lastDate = await AsyncStorage.getItem(KEYS.LAST_REPORT_DATE);
-  const today = new Date().toISOString().slice(0, 10);
-  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  // Use local dates instead of UTC
+  const todayDate = new Date();
+  const yesterdayDate = new Date(todayDate.getTime() - 86400000);
+  const today = `${todayDate.getFullYear()}-${String(todayDate.getMonth() + 1).padStart(2, '0')}-${String(todayDate.getDate()).padStart(2, '0')}`;
+  const yesterday = `${yesterdayDate.getFullYear()}-${String(yesterdayDate.getMonth() + 1).padStart(2, '0')}-${String(yesterdayDate.getDate()).padStart(2, '0')}`;
   let streak = parseInt((await AsyncStorage.getItem(KEYS.STREAK)) || '0', 10);
 
   if (lastDate === today) {
@@ -113,7 +116,15 @@ export interface SavedReport {
 
 export async function saveReport(report: SavedReport): Promise<void> {
   const raw = await AsyncStorage.getItem(KEYS.MY_REPORTS);
-  const list: SavedReport[] = raw ? JSON.parse(raw) : [];
+  let list: SavedReport[] = [];
+  if (raw) {
+    try {
+      list = JSON.parse(raw);
+    } catch (e) {
+      console.warn('Failed to parse MY_REPORTS, resetting list', e);
+      list = [];
+    }
+  }
   list.unshift(report);
   if (list.length > 50) list.length = 50;
   await AsyncStorage.setItem(KEYS.MY_REPORTS, JSON.stringify(list));
@@ -121,7 +132,13 @@ export async function saveReport(report: SavedReport): Promise<void> {
 
 export async function getMyReports(): Promise<SavedReport[]> {
   const raw = await AsyncStorage.getItem(KEYS.MY_REPORTS);
-  return raw ? JSON.parse(raw) : [];
+  if (!raw) return [];
+  try {
+    return JSON.parse(raw);
+  } catch (e) {
+    console.warn('Failed to parse MY_REPORTS, returning empty array', e);
+    return [];
+  }
 }
 
 export async function isDisclaimerDismissed(): Promise<boolean> {

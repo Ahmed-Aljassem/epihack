@@ -29,7 +29,7 @@ const P = {
     inv: '#FFF', green: '#4CAF50', bar: 'light' as const,
   },
 };
-type Th = any;
+type Th = typeof P.light;
 
 function uid() {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {

@@ -19,9 +19,6 @@ const t = {
 
 type AuthMode = 'signin' | 'signup' | 'confirm';
 
-/** Returns true when the string looks like a phone number */
-const isPhone = (v: string) => /^\+?\d[\d\s\-().]{6,}$/.test(v.trim());
-
 export default function AuthModal() {
   const { mode: initialMode } = useLocalSearchParams<{ mode: string }>();
   const { signInUser } = useAuth();
@@ -36,8 +33,6 @@ export default function AuthModal() {
   
   // Confirmation code
   const [otpCode, setOtpCode] = useState('');
-
-  const detectedPhone = isPhone(identity);
 
   // ─── Animations ─────────────────────────────────────
   const fadeIn = useRef(new Animated.Value(0)).current;
@@ -72,7 +67,6 @@ export default function AuthModal() {
             password: pass,
             name: name,
             role: 'citizen',
-            phone_number: '+15555555555' // backend requires this optionally, maybe mock it if not provided
           }),
         });
         
@@ -100,7 +94,8 @@ export default function AuthModal() {
         }
 
         const data = await res.json();
-        await signInUser(data.access_token || 'token', 'Reporter', identity.trim());
+        if (!data.access_token) throw new Error('No access token received');
+        await signInUser(data.access_token, 'Reporter', identity.trim());
 
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         router.back();
@@ -145,7 +140,8 @@ export default function AuthModal() {
       });
       if (loginRes.ok) {
         const data = await loginRes.json();
-        await signInUser(data.access_token || 'token', name, identity.trim());
+        if (!data.access_token) throw new Error('No access token received from auto-login');
+        await signInUser(data.access_token, name, identity.trim());
         router.back();
       } else {
         setAuthMode('signin');

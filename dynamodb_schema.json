@@ -1,32 +1,32 @@
 {
-    event_id: UUID,
-    lat: FLOAT,
-    long: FLOAT,
-    timestamp: ISO8601_STRING,
-    report:[
+    "event_id": "UUID",
+    "lat": "FLOAT",
+    "long": "FLOAT",
+    "timestamp": "ISO8601_STRING",
+    "report": [
         {
-            type: human,
-            sick_flag: 0/1,
-            symptoms: [
-                <STRING_LIST>
+            "type": "human",
+            "sick_flag": "0/1",
+            "symptoms": [
+                "STRING_LIST"
             ],
-            death_flag: 0/1
+            "death_flag": "0/1"
         },
         {
-            type: animal,
-            symptoms: [
-                <STRING_LIST>
+            "type": "animal",
+            "symptoms": [
+                "STRING_LIST"
             ], 
-            death_flag: 0/1,
-            photos: []
+            "death_flag": "0/1",
+            "photos": []
         },
         {
-            type: environment,
-            symptoms: [
-                <STRING_LIST>
+            "type": "environment",
+            "symptoms": [
+                "STRING_LIST"
             ],
-            death_flag: 0/1,
-            photos: []
+            "death_flag": "0/1",
+            "photos": []
         }
     ]
 }

@@ -55,24 +55,38 @@ export default function MapScreen() {
   React.useEffect(() => {
     if (mapLoaded && userLoc) {
       const script = `
-        if (window.map) {
-           window.map.flyTo([${userLoc.lat}, ${userLoc.lng}], 10, { duration: 1.5 });
-           
-           // Blue User Dot
-           L.circleMarker([${userLoc.lat}, ${userLoc.lng}], {
-              radius: 8, fillColor: '#007AFF', color: '#FFF', weight: 3, opacity: 1, fillOpacity: 1
-           }).addTo(window.map);
-           
-           // Soft blue radar glow
-           L.circle([${userLoc.lat}, ${userLoc.lng}], {
-              radius: 4000, fillColor: '#007AFF', color: '#007AFF', weight: 1, opacity: 0.3, fillOpacity: 0.1
-           }).addTo(window.map);
+        if (window.userMarker) window.map.removeLayer(window.userMarker);
+        window.userMarker = L.circleMarker([${userLoc.lat}, ${userLoc.lng}], {
+          color: '#FFF', fillColor: '#007AFF', fillOpacity: 1, radius: 6, weight: 2
+        }).addTo(window.map);
+        if (${!selected}) {
+          window.map.flyTo([${userLoc.lat}, ${userLoc.lng}], 8, { duration: 0.5 });
         }
         true;
       `;
       webviewRef.current?.injectJavaScript(script);
     }
   }, [mapLoaded, userLoc]);
+
+  React.useEffect(() => {
+    if (mapLoaded) {
+      const script = `
+        window.selectedZip = "${selected || ''}";
+        if (typeof renderMarkers === 'function') {
+          renderMarkers();
+          if (window.selectedZip) {
+            var allData = [].concat(cities, zips);
+            var sel = allData.find(x => x.zip === window.selectedZip);
+            if (sel) {
+              map.flyTo([sel.lat - 0.2, sel.lng], map.getZoom() > 8 ? map.getZoom() : 9, { duration: 0.5 });
+            }
+          }
+        }
+        true;
+      `;
+      webviewRef.current?.injectJavaScript(script);
+    }
+  }, [mapLoaded, selected]);
 
   const selArea = AREAS.find(x => x.zip === selected);
 
@@ -81,7 +95,7 @@ export default function MapScreen() {
     setSelected(zip === selected ? null : zip);
   };
 
-  const htmlContent = `
+  const htmlContent = React.useMemo(() => `
     <!DOCTYPE html>
     <html>
     <head>
@@ -124,22 +138,22 @@ export default function MapScreen() {
                 maxZoom: 19
             }).addTo(map);
 
-            var cities = ${JSON.stringify(CITIES)};
-            var zips = ${JSON.stringify(ZIPS)};
-            var selectedZip = "${selected || ''}";
+            window.cities = ${JSON.stringify(CITIES)};
+            window.zips = ${JSON.stringify(ZIPS)};
+            window.selectedZip = "";
             
             var currentLayerGroup = L.layerGroup().addTo(map);
 
-            function renderMarkers() {
+            window.renderMarkers = function() {
                 currentLayerGroup.clearLayers();
                 var zoom = map.getZoom();
                 var isZoomedIn = zoom >= 8;
                 
                 // Show Cities if zoomed out, Zips + Outer Cities if zoomed in
-                var dataToShow = isZoomedIn ? [].concat(zips, cities.filter(c => c.id !== 'phx' && c.id !== 'tuc')) : cities;
+                var dataToShow = isZoomedIn ? [].concat(window.zips, window.cities.filter(c => c.id !== 'phx' && c.id !== 'tuc')) : window.cities;
 
                 dataToShow.forEach(function(a) {
-                    var isSelected = a.zip === selectedZip;
+                    var isSelected = a.zip === window.selectedZip;
                     
                     // Translucent Heatmap Circle
                     L.circle([a.lat, a.lng], {
@@ -167,21 +181,12 @@ export default function MapScreen() {
                 });
             }
 
-            map.on('zoomend', renderMarkers);
-            renderMarkers(); // Initial render
-
-            // Smoothly pan map if selected
-            if (selectedZip) {
-                var allData = [].concat(cities, zips);
-                var sel = allData.find(x => x.zip === selectedZip);
-                if (sel) {
-                    map.flyTo([sel.lat - 0.2, sel.lng], map.getZoom() > 8 ? map.getZoom() : 9, { duration: 0.5 });
-                }
-            }
+            map.on('zoomend', window.renderMarkers);
+            window.renderMarkers(); // Initial render
         </script>
     </body>
     </html>
-  `;
+  `, []);
 
   return (
     <View style={{ flex: 1, backgroundColor: t.bg }}>

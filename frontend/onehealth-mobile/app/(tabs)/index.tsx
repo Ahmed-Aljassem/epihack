@@ -8,7 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
-import { getReportStats, getUserZip, setFirstReportComplete, incrementReportCount } from '@/utils/storage';
+import { getReportStats, getUserZip } from '@/utils/storage';
 import { useLang } from '@/utils/i18n';
 import ReportFlow from '@/components/flows/ReportFlow';
 
@@ -52,7 +52,7 @@ export default function HomeScreen() {
   const [stats, setStats] = useState({ count: 0, streak: 0 });
 
   // App Open Flow States
-  const [showForm, setShowForm] = useState(true);
+  const [showForm, setShowForm] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
   
   // ─── Splash Animations ───

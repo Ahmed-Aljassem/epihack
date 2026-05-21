@@ -85,7 +85,7 @@ export function useLang() {
 
   useEffect(() => {
     getLang().then(l => {
-      const parsed = (l as 'EN' | 'ES' | 'TO') || 'EN';
+      const parsed = ['EN', 'ES', 'TO'].includes(l as string) ? (l as 'EN' | 'ES' | 'TO') : 'EN';
       currentLang = parsed;
       setLangState(parsed);
     });
@@ -100,6 +100,6 @@ export function useLang() {
 
 export function updateLang(newLang: 'EN' | 'ES' | 'TO') {
   currentLang = newLang;
-  setStorageLang(newLang);
+  void setStorageLang(newLang);
   listeners.forEach(fn => fn(newLang));
 }
