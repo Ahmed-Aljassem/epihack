@@ -1,7 +1,6 @@
 from datetime import datetime
 from typing import Any
 from pydantic import BaseModel, EmailStr, Field
-from bson import ObjectId
 from app.models.enums import (
     UserRole, SurveyCategory, SurveyStatus,
     AlertSeverity, AlertStatus, QuestionType,
@@ -9,18 +8,6 @@ from app.models.enums import (
 
 
 # ── Shared ───────────────────────────────────────────────────────
-
-class PyObjectId(str):
-    @classmethod
-    def __get_validators__(cls):
-        yield cls.validate
-
-    @classmethod
-    def validate(cls, v):
-        if not ObjectId.is_valid(v):
-            raise ValueError("Invalid ObjectId")
-        return str(v)
-
 
 class GeoPoint(BaseModel):
     type: str = "Point"
