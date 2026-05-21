@@ -1,6 +1,6 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Search, ArrowRight, Plus } from "lucide-react";
+import { useState, useEffect } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { Search, ArrowRight, Plus, ChevronLeft } from "lucide-react";
 import { alertsService } from "../services/alertsService";
 
 const SEVERITIES = ["Low", "Moderate", "High", "Critical"];
@@ -14,21 +14,56 @@ const DEFAULT_ACTIONS = [
   "Cover sleeping areas",
 ];
 
-const LINKED = ["RPT-1022", "RPT-1014", "RPT-1009"];
+function normalizeSeverity(s) {
+  const map = {
+    low: "Low",
+    medium: "Moderate",
+    high: "High",
+    critical: "Critical",
+  };
+  return map[s] || s;
+}
 
-export default function AlertComposerPage() {
+function normalizeCategory(c) {
+  const map = {
+    people: "People",
+    animal: "Animal",
+    environment: "Environment",
+    vector: "Vector",
+  };
+  return map[c] || c;
+}
+
+function normalizeChannel(c) {
+  return c.charAt(0).toUpperCase() + c.slice(1);
+}
+
+export default function EditAlertPage() {
   const navigate = useNavigate();
-  const [form, setForm] = useState({
-    title: "",
-    severity: "Moderate",
-    status: "open",
-    category: "People",
-    target: "",
-    message: "",
-    actions: [],
-    channels: ["Web"],
-  });
+  const { id } = useParams();
+  const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const alert = alertsService.getById(Number(id));
+    if (!alert) {
+      navigate("/agency/alerts");
+      return;
+    }
+
+    setForm({
+      title: alert.title,
+      severity: normalizeSeverity(alert.severity),
+      status: alert.status,
+      category: normalizeCategory(alert.category),
+      target: alert.targetLocations?.join(" · ") || "",
+      message: alert.description,
+      actions: alert.recommendedActions || DEFAULT_ACTIONS,
+      channels: (alert.channels || []).map(normalizeChannel),
+    });
+    setLoading(false);
+  }, [id, navigate]);
 
   const toggleChannel = (c) => {
     setForm((f) => ({
@@ -42,13 +77,11 @@ export default function AlertComposerPage() {
   const handleSubmit = async () => {
     setSaving(true);
     try {
-      // Parse target locations from the string (split by · or ,)
       const targetLocations = form.target
         .split(/[·,]/)
         .map((z) => z.trim())
         .filter((z) => z);
 
-      // Normalize severity to lowercase
       const severityMap = {
         Low: "low",
         Moderate: "medium",
@@ -56,7 +89,6 @@ export default function AlertComposerPage() {
         Critical: "critical",
       };
 
-      // Normalize category to lowercase
       const categoryMap = {
         People: "people",
         Animal: "animal",
@@ -64,26 +96,20 @@ export default function AlertComposerPage() {
         Vector: "vector",
       };
 
-      // Normalize channels to lowercase
       const normalizedChannels = form.channels.map((c) => c.toLowerCase());
 
-      // Create alert object
       const alertData = {
         severity: severityMap[form.severity] || "medium",
-        status: "open",
+        status: form.status,
         category: categoryMap[form.category] || "people",
         title: form.title,
         description: form.message,
         targetLocations,
         recommendedActions: form.actions,
         channels: normalizedChannels,
-        linkedReports: [], // Can be populated later
       };
 
-      // Save using the service
-      alertsService.add(alertData);
-
-      // Navigate back to alerts page
+      alertsService.update(Number(id), alertData);
       navigate("/agency/alerts");
     } catch (error) {
       console.error("Error saving alert:", error);
@@ -92,12 +118,30 @@ export default function AlertComposerPage() {
     }
   };
 
+  if (loading) {
+    return (
+      <div style={{ color: "var(--muted)", fontSize: 14 }}>Loading alert…</div>
+    );
+  }
+
+  if (!form) {
+    return null;
+  }
+
   return (
     <div>
       <div className="console-header">
         <div>
-          <h1 className="console-title">New public alert</h1>
-          <p className="console-subtitle">Draft · auto-saved</p>
+          <button
+            className="btn btn-ghost"
+            onClick={() => navigate("/agency/alerts")}
+            style={{ marginBottom: 12 }}
+          >
+            <ChevronLeft size={14} />
+            Back
+          </button>
+          <h1 className="console-title">Edit alert</h1>
+          <p className="console-subtitle">Make changes and save</p>
         </div>
         <div className="console-actions">
           <div className="search-wrap">
@@ -108,13 +152,13 @@ export default function AlertComposerPage() {
               placeholder="Search reports, places, IDs…"
             />
           </div>
-          <button className="btn btn-ghost">Save draft</button>
+          <button className="btn btn-ghost">Discard</button>
           <button
             className="btn btn-primary"
             onClick={handleSubmit}
             disabled={saving}
           >
-            {saving ? "Saving..." : "Review & send"}
+            {saving ? "Saving..." : "Save changes"}
             <ArrowRight size={14} strokeWidth={2.4} />
           </button>
         </div>
@@ -243,13 +287,6 @@ export default function AlertComposerPage() {
               ))}
             </div>
           </div>
-
-          <div className="composer-block">
-            <div className="detail-eyebrow">Linked reports</div>
-            <p className="detail-side-meta">
-              {LINKED.join(" · ")} · 5 more from the last 14 days
-            </p>
-          </div>
         </div>
 
         <div>
@@ -259,9 +296,7 @@ export default function AlertComposerPage() {
               <span className="preview-meta">≤ 160 chars</span>
             </div>
             <div className="preview-body">
-              [One Health AZ] Mosquito activity ↑ in NW Pima. Drain standing
-              water, use repellent dawn/dusk. Fever+rash? Contact a provider.
-              Info: oh.az/alerts/24
+              [One Health AZ] {form.title.substring(0, 80)}...
             </div>
           </div>
 
@@ -272,11 +307,12 @@ export default function AlertComposerPage() {
             </div>
             <div className="preview-email-title">{form.title}</div>
             <div className="preview-email-body">
-              Hello — public health partners are seeing more mosquito activity
-              in NW Pima this week. A few simple steps can help…
+              {form.message.substring(0, 140)}...
             </div>
             <div className="preview-pill-row">
-              <span className="preview-pill">3 actions</span>
+              <span className="preview-pill">
+                {form.actions.length} actions
+              </span>
               <span className="preview-pill">Map link</span>
               <span className="preview-pill">ES version</span>
             </div>

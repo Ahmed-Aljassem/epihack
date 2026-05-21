@@ -1,0 +1,53 @@
+[
+  {
+    "id": 1,
+    "severity": "high",
+    "status": "open",
+    "category": "vector",
+    "title": "Mosquito activity rising — drain standing water",
+    "description": "Mosquito activity is up across NW Pima. Standing-water reports trending +28% week-over-week. Drain standing water around your home. Use repellent at dawn and dusk.",
+    "targetLocations": ["85719", "85705", "85745"],
+    "recommendedActions": [
+      "Drain standing water",
+      "Use EPA-approved repellent",
+      "Cover sleeping areas"
+    ],
+    "channels": ["web", "sms", "email"],
+    "linkedReports": ["RPT-1022", "RPT-1014", "RPT-1009"],
+    "createdAt": "2026-05-19T14:48:00Z"
+  },
+  {
+    "id": 2,
+    "severity": "medium",
+    "status": "open",
+    "category": "people",
+    "title": "Fever cluster · 3 households · 85735",
+    "description": "Linked reports from 3 households within 24 hours. Awaiting routing decision.",
+    "targetLocations": ["85735"],
+    "recommendedActions": [
+      "Contact local health department",
+      "Isolate confirmed cases",
+      "Monitor for symptoms"
+    ],
+    "channels": ["web", "email"],
+    "linkedReports": ["RPT-1024"],
+    "createdAt": "2026-05-19T13:12:00Z"
+  },
+  {
+    "id": 3,
+    "severity": "high",
+    "status": "open",
+    "category": "animal",
+    "title": "Unsteady coyote · pasture · 85719",
+    "description": "Single-source animal report routed to AZGF rabies surveillance.",
+    "targetLocations": ["85719"],
+    "recommendedActions": [
+      "Report to AZGF",
+      "Avoid contact",
+      "Monitor livestock"
+    ],
+    "channels": ["web"],
+    "linkedReports": ["RPT-1020"],
+    "createdAt": "2026-05-19T12:14:00Z"
+  }
+]

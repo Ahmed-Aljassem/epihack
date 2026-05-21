@@ -18,6 +18,7 @@ const ReportDetailPage = lazy(() => import("./pages/ReportDetailPage"));
 const MapPage = lazy(() => import("./pages/MapPage"));
 const AlertsPage = lazy(() => import("./pages/AlertsPage"));
 const AlertComposerPage = lazy(() => import("./pages/AlertComposerPage"));
+const EditAlertPage = lazy(() => import("./pages/EditAlertPage"));
 const ResourcesPage = lazy(() => import("./pages/ResourcesPage"));
 const RoutingRulesPage = lazy(() => import("./pages/RoutingRulesPage"));
 const TeamPage = lazy(() => import("./pages/TeamPage"));
@@ -58,18 +59,43 @@ export default function App() {
             <Route path="/report/sent" element={<Navigate to="/" replace />} />
 
             {/* Guest-only */}
-            <Route path="/login" element={<GuestRoute><LoginPage /></GuestRoute>} />
-            <Route path="/register" element={<GuestRoute><RegisterPage /></GuestRoute>} />
+            <Route
+              path="/login"
+              element={
+                <GuestRoute>
+                  <LoginPage />
+                </GuestRoute>
+              }
+            />
+            <Route
+              path="/register"
+              element={
+                <GuestRoute>
+                  <RegisterPage />
+                </GuestRoute>
+              }
+            />
 
             {/* Authenticated agency console */}
-            <Route path="/agency" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
-              <Route index element={<Navigate to="/agency/dashboard" replace />} />
+            <Route
+              path="/agency"
+              element={
+                <ProtectedRoute>
+                  <AppLayout />
+                </ProtectedRoute>
+              }
+            >
+              <Route
+                index
+                element={<Navigate to="/agency/dashboard" replace />}
+              />
               <Route path="dashboard" element={<DashboardPage />} />
               <Route path="reports" element={<ReportsListPage />} />
               <Route path="reports/:id" element={<ReportDetailPage />} />
               <Route path="map" element={<MapPage />} />
               <Route path="alerts" element={<AlertsPage />} />
               <Route path="alerts/new" element={<AlertComposerPage />} />
+              <Route path="alerts/:id" element={<EditAlertPage />} />
               <Route path="resources" element={<ResourcesPage />} />
               <Route path="routing" element={<RoutingRulesPage />} />
               <Route path="team" element={<TeamPage />} />
@@ -79,11 +105,26 @@ export default function App() {
             </Route>
 
             {/* Legacy starter routes */}
-            <Route path="/dashboard" element={<Navigate to="/agency/dashboard" replace />} />
-            <Route path="/surveys" element={<Navigate to="/agency/surveys" replace />} />
-            <Route path="/surveys/:id" element={<Navigate to="/agency/surveys" replace />} />
-            <Route path="/alerts" element={<Navigate to="/agency/alerts" replace />} />
-            <Route path="/my-responses" element={<Navigate to="/agency/my-responses" replace />} />
+            <Route
+              path="/dashboard"
+              element={<Navigate to="/agency/dashboard" replace />}
+            />
+            <Route
+              path="/surveys"
+              element={<Navigate to="/agency/surveys" replace />}
+            />
+            <Route
+              path="/surveys/:id"
+              element={<Navigate to="/agency/surveys" replace />}
+            />
+            <Route
+              path="/alerts"
+              element={<Navigate to="/agency/alerts" replace />}
+            />
+            <Route
+              path="/my-responses"
+              element={<Navigate to="/agency/my-responses" replace />}
+            />
 
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
