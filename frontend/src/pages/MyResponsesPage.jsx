@@ -1,44 +1,56 @@
-import { useMyResponses } from "../hooks/useData";
 import { format } from "date-fns";
-import { FileText } from "lucide-react";
+import { Link } from "react-router-dom";
+import { FileText, ArrowRight } from "lucide-react";
+import { useMyResponses } from "../hooks/useData";
 
 export default function MyResponsesPage() {
-  const { data: responses, loading } = useMyResponses();
+  const { data: responses, loading, error } = useMyResponses();
 
   return (
     <div>
-      <div className="page-header">
-        <h1 className="page-title">My Submissions</h1>
-        <p className="page-subtitle">All survey responses you have submitted</p>
+      <div className="console-header">
+        <div>
+          <h1 className="console-title">My submissions</h1>
+          <p className="console-subtitle">
+            All survey responses you've submitted as a logged-in user
+          </p>
+        </div>
       </div>
 
       {loading ? (
-        <div style={{ color: "var(--muted)", fontSize: 14 }}>Loading…</div>
+        <div className="skeleton-block" style={{ height: 220 }} />
+      ) : error ? (
+        <div className="empty-state">
+          <div className="empty-state-title">Couldn't load your responses</div>
+          <div className="empty-state-copy">{error.message || String(error)}</div>
+        </div>
+      ) : !responses?.length ? (
+        <div className="empty-state">
+          <div className="empty-state-title">You haven't submitted any responses yet</div>
+          <div className="empty-state-copy">
+            <Link to="/agency/surveys" className="auth-link">Browse active surveys</Link> to participate.
+          </div>
+        </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {(responses || []).map((r) => (
-            <div key={r.id} className="card" style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
-              <div style={{ width: 36, height: 36, borderRadius: 8, background: "var(--accent-dim)", display: "grid", placeItems: "center", flexShrink: 0 }}>
-                <FileText size={16} color="var(--accent)" />
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>Survey ID: {r.survey_id}</div>
-                <div style={{ color: "var(--muted)", fontSize: 11 }}>
-                  {r.answers.length} answers submitted · {format(new Date(r.submitted_at), "MMM d, yyyy 'at' HH:mm")}
+        <div className="list-card">
+          {responses.map((r) => (
+            <div key={r.id} className="list-row list-row--resource">
+              <span className="list-icon">
+                <FileText size={14} strokeWidth={2} />
+              </span>
+              <div>
+                <div className="list-title">{r.survey_title || r.survey_id}</div>
+                <div className="list-meta">
+                  {r.answers?.length || 0} answer{r.answers?.length === 1 ? "" : "s"}
+                  {" · "}
+                  {r.submitted_at && format(new Date(r.submitted_at), "MMM d, yyyy 'at' h:mm a")}
                 </div>
-                {r.notes && (
-                  <div style={{ marginTop: 6, fontSize: 12, color: "var(--text)", background: "var(--surface-2)", borderRadius: 6, padding: "6px 10px" }}>
-                    {r.notes}
-                  </div>
-                )}
               </div>
+              <Link to={`/agency/surveys/${r.survey_id}`} className="list-chev">
+                <ArrowRight size={16} />
+              </Link>
             </div>
           ))}
-          {!responses?.length && (
-            <div className="card" style={{ color: "var(--muted)", textAlign: "center", padding: 40 }}>
-              You haven't submitted any responses yet. Head to Surveys to participate.
-            </div>
-          )}
         </div>
       )}
     </div>

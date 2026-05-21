@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useSurvey, useMutation } from "../hooks/useData";
-import { responsesAPI } from "../services/api";
-import toast from "react-hot-toast";
 import { ArrowLeft, Send } from "lucide-react";
+import toast from "react-hot-toast";
+import { useSurvey, useMutation } from "../hooks/useData";
+import { responsesService } from "../services/dataSources";
 
 function QuestionField({ question, value, onChange }) {
-  const { id, text, type, options, required, min_value, max_value } = question;
+  const { id, type, options, required, min_value, max_value } = question;
 
   const props = {
     id,
@@ -53,9 +53,9 @@ function QuestionField({ question, value, onChange }) {
               onChange(id, checked ? arr.filter((x) => x !== o.value) : [...arr, o.value]);
             };
             return (
-              <label key={o.value} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13 }}>
+              <label key={o.value} className="multi-check">
                 <input type="checkbox" checked={checked} onChange={toggle} />
-                {o.label}
+                <span>{o.label}</span>
               </label>
             );
           })}
@@ -72,9 +72,9 @@ function QuestionField({ question, value, onChange }) {
             onChange={(e) => onChange(id, Number(e.target.value))}
             style={{ width: "100%", accentColor: "var(--accent)" }}
           />
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--muted)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--muted)" }}>
             <span>{min_value ?? 1}</span>
-            <span style={{ color: "var(--accent)", fontWeight: 700 }}>{value || "—"}</span>
+            <span style={{ color: "var(--accent)", fontWeight: 600 }}>{value || "—"}</span>
             <span>{max_value ?? 10}</span>
           </div>
         </div>
@@ -83,7 +83,7 @@ function QuestionField({ question, value, onChange }) {
     case "date":
       return <input type="date" className="input" {...props} />;
 
-    default: // text
+    default:
       return <textarea className="textarea" {...props} placeholder="Your answer…" />;
   }
 }
@@ -91,11 +91,11 @@ function QuestionField({ question, value, onChange }) {
 export default function SurveyDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { data: survey, loading } = useSurvey(id);
+  const { data: survey, loading, error } = useSurvey(id);
   const [answers, setAnswers] = useState({});
 
   const { mutate: submit, loading: submitting } = useMutation(
-    () => responsesAPI.submit({
+    () => responsesService.submit({
       survey_id: id,
       answers: Object.entries(answers).map(([question_id, value]) => ({ question_id, value })),
     }),
@@ -105,8 +105,35 @@ export default function SurveyDetailPage() {
     }
   );
 
-  if (loading) return <div className="loading-screen">Loading survey…</div>;
-  if (!survey) return <div style={{ color: "var(--muted)" }}>Survey not found.</div>;
+  if (loading) {
+    return (
+      <div>
+        <button className="btn btn-ghost" style={{ marginBottom: 18 }} onClick={() => navigate(-1)}>
+          <ArrowLeft size={14} /> Back
+        </button>
+        <div className="skeleton-block" style={{ height: 80, marginBottom: 14 }} />
+        <div className="skeleton-block" style={{ height: 320 }} />
+      </div>
+    );
+  }
+
+  if (error || !survey) {
+    return (
+      <div>
+        <button className="btn btn-ghost" style={{ marginBottom: 18 }} onClick={() => navigate(-1)}>
+          <ArrowLeft size={14} /> Back
+        </button>
+        <div className="empty-state">
+          <div className="empty-state-title">
+            {error ? "Couldn't load this survey" : "Survey not found"}
+          </div>
+          <div className="empty-state-copy">
+            {error?.message || "It may have been deleted or paused."}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const handleAnswer = (qId, val) => setAnswers((prev) => ({ ...prev, [qId]: val }));
 
@@ -123,32 +150,36 @@ export default function SurveyDetailPage() {
   };
 
   return (
-    <div style={{ maxWidth: 680 }}>
-      <button className="btn btn-ghost" style={{ marginBottom: 20, fontSize: 12 }} onClick={() => navigate(-1)}>
-        <ArrowLeft size={14} /> Back
+    <div>
+      <button className="btn btn-ghost" style={{ marginBottom: 18 }} onClick={() => navigate(-1)}>
+        <ArrowLeft size={14} /> Back to surveys
       </button>
 
-      <div className="page-header">
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-          <span className={`badge badge-${survey.category}`}>{survey.category}</span>
-          {survey.tags?.map((t) => (
-            <span key={t} style={{ fontSize: 11, color: "var(--muted)" }}>#{t}</span>
-          ))}
+      <div className="console-header">
+        <div>
+          <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+            <span className={`badge badge-${mapCat(survey.category)}`}>{categoryLabel(survey.category)}</span>
+            <span className={`badge ${survey.status === "paused" ? "badge-warn" : "badge-accent"}`}>
+              {survey.status || "active"}
+            </span>
+            <span className="badge">{survey.response_count ?? 0} responses</span>
+            {(survey.tags || []).map((t) => (
+              <span key={t} className="badge">#{t}</span>
+            ))}
+          </div>
+          <h1 className="console-title">{survey.title}</h1>
+          <p className="console-subtitle" style={{ maxWidth: 640 }}>{survey.description}</p>
         </div>
-        <h1 className="page-title">{survey.title}</h1>
-        <p className="page-subtitle" style={{ marginTop: 6 }}>{survey.description}</p>
       </div>
 
-      <form onSubmit={handleSubmit}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+      <form onSubmit={handleSubmit} style={{ maxWidth: 720 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           {survey.questions.map((q, i) => (
             <div key={q.id} className="card">
-              <div style={{ marginBottom: 12 }}>
-                <span style={{ color: "var(--muted)", fontSize: 11 }}>Q{i + 1}</span>
-                <div style={{ fontWeight: 600, fontSize: 14, marginTop: 2 }}>
-                  {q.text}
-                  {q.required && <span style={{ color: "var(--danger)", marginLeft: 4 }}>*</span>}
-                </div>
+              <div className="detail-eyebrow">Question {i + 1}</div>
+              <div style={{ fontWeight: 600, fontSize: 15, margin: "6px 0 14px" }}>
+                {q.text}
+                {q.required && <span style={{ color: "var(--danger)", marginLeft: 6 }}>*</span>}
               </div>
               <QuestionField
                 question={q}
@@ -163,12 +194,23 @@ export default function SurveyDetailPage() {
           type="submit"
           className="btn btn-primary"
           disabled={submitting}
-          style={{ marginTop: 24, width: "100%", justifyContent: "center", padding: "12px" }}
+          style={{ marginTop: 20, width: "100%", justifyContent: "center", padding: "12px" }}
         >
           <Send size={15} />
-          {submitting ? "Submitting…" : "Submit Report"}
+          {submitting ? "Submitting…" : "Submit response"}
         </button>
       </form>
     </div>
   );
+}
+
+function mapCat(c) {
+  return c === "human" ? "people" : c === "environment" ? "env" : c;
+}
+function categoryLabel(c) {
+  if (c === "human") return "People";
+  if (c === "environment") return "Environment";
+  if (c === "animal") return "Animal";
+  if (c === "vector") return "Vector";
+  return c;
 }

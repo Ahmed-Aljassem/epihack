@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { Search, Plus, AlertTriangle } from "lucide-react";
 import { useAlerts, useMutation } from "../hooks/useData";
-import { alertsAPI } from "../services/api";
+import { alertsService } from "../services/dataSources";
 import { useAuth } from "../context/AuthContext";
 
 const MOCK_ALERTS = [
@@ -93,7 +93,7 @@ export default function AlertsPage() {
   );
 
   const { mutate: updateStatus } = useMutation(
-    (id, s) => alertsAPI.updateStatus(id, s),
+    (id, s) => alertsService.updateStatus(id, s),
     { successMessage: "Alert status updated", onSuccess: refetch }
   );
 

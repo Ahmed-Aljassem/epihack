@@ -1,48 +1,74 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, Plus, ChevronRight } from "lucide-react";
+import { Search, Plus, ChevronRight, RefreshCw } from "lucide-react";
+import { CATEGORY_COLORS } from "../data/reports";
+import { useReports } from "../hooks/useReports";
+import { useTickingAgo } from "../hooks/useTickingAgo";
+import { detectClusters } from "../lib/clusters";
+import ReportsMap from "../components/console/ReportsMap";
 
-const STATS = [
-  { label: "New today",       value: 12,  delta: "+3 vs avg",  tone: "up" },
-  { label: "Open · in review", value: 27, delta: "—" },
-  { label: "Awaiting routing", value: 8,  delta: "—" },
-  { label: "Routed · week",    value: 46, delta: "+18", tone: "up" },
-  { label: "Resolved · 30d",   value: 310, delta: "—" },
-];
-
-const MAP_DOTS = [
-  { top: "32%",  left: "55%", color: "#fecaca", size: "lg" },
-  { top: "44%",  left: "32%", color: "#bfdbfe", size: "lg" },
-  { top: "60%",  left: "22%", color: "#c7d2fe", size: "lg" },
-  { top: "52%",  left: "58%", color: "#bbf7d0", size: "" },
-  { top: "44%",  left: "68%", color: "#fed7aa", size: "lg" },
-];
-
-const LEGEND = [
-  { label: "People · 4",  color: "#a5b4fc" },
-  { label: "Animal · 5",  color: "#34d399" },
-  { label: "Env · 2",     color: "#86efac" },
-  { label: "Vector · 1",  color: "#fdba74" },
-  { label: "cluster · NW Pima · 3 animal · 2mi", color: "#cbd5e1" },
-];
-
-const QUEUE = [
-  { id: "RPT-1024", category: "Animal", summary: "Coyote, unsteady in pasture", location: "85719 · Pima",  status: "New",      submitted: "2:14 PM",  tone: "new" },
-  { id: "RPT-1023", category: "People", summary: "Fever cluster · 3 households",  location: "85735",          status: "In review", submitted: "1:48 PM" },
-  { id: "RPT-1022", category: "Vector", summary: "Mosquito activity ↑",          location: "85705",          status: "Routed",    submitted: "12:31 PM" },
+const LEGEND_DEFS = [
+  { key: "people", label: "People",      color: CATEGORY_COLORS.people },
+  { key: "animal", label: "Animal",      color: CATEGORY_COLORS.animal },
+  { key: "env",    label: "Env",         color: CATEGORY_COLORS.env    },
+  { key: "vector", label: "Vector",      color: CATEGORY_COLORS.vector },
 ];
 
 const QUEUE_TABS = [
-  { id: "new",     label: "New · 12",       active: true },
-  { id: "review",  label: "In review · 27" },
-  { id: "routed",  label: "Routed · 46" },
+  { id: "new",      label: "New" },
+  { id: "review",   label: "In review" },
+  { id: "routed",   label: "Routed" },
   { id: "resolved", label: "Resolved" },
 ];
+
+const STATUS_FILTER_TO_LABEL = {
+  new: "New",
+  review: "In review",
+  routed: "Routed",
+  resolved: "Resolved",
+};
+
+const MAP_RANGE_HOURS = { "7d": 24 * 7, "30d": 24 * 30, All: Infinity };
 
 export default function DashboardPage() {
   const navigate = useNavigate();
   const [range, setRange] = useState("All");
   const [tab, setTab] = useState("new");
+
+  const { allReports, counts, lastUpdatedAt, refresh, loading } = useReports();
+  const ago = useTickingAgo(lastUpdatedAt, { compact: true });
+
+  // Map slice — filtered by date range.
+  const mapReports = useMemo(() => {
+    const hours = MAP_RANGE_HOURS[range] ?? Infinity;
+    if (hours === Infinity) return allReports;
+    const cutoff = Date.now() - hours * 60 * 60 * 1000;
+    return allReports.filter((r) => new Date(r.submittedAt).getTime() >= cutoff);
+  }, [allReports, range]);
+
+  const legendCounts = useMemo(() => {
+    const acc = { people: 0, animal: 0, env: 0, vector: 0 };
+    mapReports.forEach((r) => {
+      if (acc[r.categorySlug] !== undefined) acc[r.categorySlug] += 1;
+    });
+    return acc;
+  }, [mapReports]);
+
+  // Stats — derived from live data.
+  const stats = useMemo(() => buildStats(allReports, counts), [allReports, counts]);
+
+  // Clusters — first one (largest) drives the dashboard card.
+  const clusters = useMemo(() => detectClusters(allReports), [allReports]);
+  const topCluster = clusters[0];
+
+  // Queue — first 6 reports matching the selected status tab.
+  const queue = useMemo(() => {
+    const targetLabel = STATUS_FILTER_TO_LABEL[tab];
+    return allReports
+      .filter((r) => r.status === targetLabel)
+      .sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt))
+      .slice(0, 6);
+  }, [allReports, tab]);
 
   return (
     <div>
@@ -50,7 +76,7 @@ export default function DashboardPage() {
         <div>
           <h1 className="console-title">Dashboard</h1>
           <p className="console-subtitle">
-            Pima &amp; surrounding counties · last 24h
+            Arizona surveillance · {allReports.length} reports tracked
           </p>
         </div>
         <div className="console-actions">
@@ -60,9 +86,22 @@ export default function DashboardPage() {
               type="text"
               className="search-input"
               placeholder="Search reports, places, IDs…"
+              onFocus={() => navigate("/agency/reports")}
             />
           </div>
-          <button className="btn btn-ghost">Export</button>
+          <button
+            className="btn btn-ghost"
+            onClick={refresh}
+            title="Refresh"
+            disabled={loading}
+          >
+            <RefreshCw
+              size={14}
+              strokeWidth={2.2}
+              className={loading ? "refresh-spin" : ""}
+            />
+            <span className="last-updated-pill">{ago}</span>
+          </button>
           <button
             className="btn btn-primary"
             onClick={() => navigate("/agency/alerts/new")}
@@ -74,12 +113,12 @@ export default function DashboardPage() {
       </div>
 
       <div className="stat-row">
-        {STATS.map((s) => (
+        {stats.map((s) => (
           <div key={s.label} className="stat-card">
             <div className="stat-label">{s.label}</div>
             <div className="stat-value">{s.value}</div>
             <div className={`stat-delta ${s.tone === "up" ? "stat-delta--up" : ""}`}>
-              {s.delta}
+              {s.delta || "—"}
             </div>
           </div>
         ))}
@@ -101,41 +140,61 @@ export default function DashboardPage() {
               ))}
             </div>
           </div>
-          <div className="map-canvas">
-            {MAP_DOTS.map((d, i) => (
-              <span
-                key={i}
-                className={`map-dot ${d.size === "lg" ? "map-dot--lg" : ""}`}
-                style={{ top: d.top, left: d.left, background: d.color }}
-              />
-            ))}
-          </div>
+          <ReportsMap reports={mapReports} height={280} />
           <div className="map-legend">
-            {LEGEND.map((l) => (
-              <span key={l.label} className="map-legend-item">
-                <span className="map-legend-dot" style={{ background: l.color }} />
-                {l.label}
-              </span>
-            ))}
+            {LEGEND_DEFS.map((l) => {
+              const count = legendCounts[l.key] || 0;
+              return (
+                <span key={l.label} className="map-legend-item">
+                  <span className="map-legend-dot" style={{ background: l.color }} />
+                  {l.label} · {count}
+                </span>
+              );
+            })}
           </div>
         </div>
 
         <div className="card cluster-card">
-          <div className="cluster-eyebrow">Cluster detected</div>
-          <div className="cluster-title">3 animal reports · NW Pima</div>
-          <p className="cluster-copy">
-            Animal reports clustering this week alongside rising mosquito
-            activity. Consider reaching out to AZGF for joint surveillance.
-          </p>
-          <div className="cluster-actions">
-            <button className="btn btn-ghost">View cluster</button>
-            <button
-              className="btn btn-primary"
-              onClick={() => navigate("/agency/alerts/new")}
-            >
-              Draft alert
-            </button>
-          </div>
+          {topCluster ? (
+            <>
+              <div className="cluster-eyebrow">
+                {clusters.length} cluster{clusters.length === 1 ? "" : "s"} detected
+              </div>
+              <div className="cluster-title">
+                {topCluster.count} {topCluster.category.toLowerCase()} reports clustering
+              </div>
+              <p className="cluster-copy">
+                {topCluster.count} reports within ~{topCluster.radiusMi} mi over the
+                last {topCluster.windowDays} days. Centroid {topCluster.centroid.latitude.toFixed(2)},{" "}
+                {topCluster.centroid.longitude.toFixed(2)}.
+              </p>
+              <div className="cluster-actions">
+                <button
+                  className="btn btn-ghost"
+                  onClick={() => navigate(`/agency/map?cluster=${topCluster.id}`)}
+                >
+                  View cluster
+                </button>
+                <button
+                  className="btn btn-primary"
+                  onClick={() =>
+                    navigate(`/agency/alerts/new?cluster=${topCluster.id}`)
+                  }
+                >
+                  Draft alert
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="cluster-eyebrow">All clear</div>
+              <div className="cluster-title">No clusters in the last 7 days</div>
+              <p className="cluster-copy">
+                Reports are spread out across categories and locations. Surveillance
+                continues — the system will flag clusters automatically.
+              </p>
+            </>
+          )}
         </div>
       </div>
 
@@ -143,15 +202,18 @@ export default function DashboardPage() {
         <div className="queue-header">
           <div className="map-card-title">Triage queue</div>
           <div className="queue-tabs">
-            {QUEUE_TABS.map((t) => (
-              <button
-                key={t.id}
-                className={`queue-tab ${tab === t.id ? "is-active" : ""}`}
-                onClick={() => setTab(t.id)}
-              >
-                {t.label}
-              </button>
-            ))}
+            {QUEUE_TABS.map((t) => {
+              const n = counts[t.id] ?? 0;
+              return (
+                <button
+                  key={t.id}
+                  className={`queue-tab ${tab === t.id ? "is-active" : ""}`}
+                  onClick={() => setTab(t.id)}
+                >
+                  {t.label} · {n}
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -161,33 +223,89 @@ export default function DashboardPage() {
               <th>ID</th>
               <th>Category</th>
               <th>Summary</th>
-              <th>Location</th>
+              <th>Coords</th>
               <th>Status</th>
               <th>Submitted</th>
               <th />
             </tr>
           </thead>
           <tbody>
-            {QUEUE.map((row) => (
-              <tr key={row.id} onClick={() => navigate(`/agency/reports/${row.id}`)}>
-                <td>{row.id}</td>
-                <td>{row.category}</td>
-                <td>{row.summary}</td>
-                <td>{row.location}</td>
+            {queue.map((r) => (
+              <tr key={r.id} onClick={() => navigate(`/agency/reports/${r.id}`)}>
+                <td>{r.id}</td>
                 <td>
-                  <span
-                    className={`queue-status ${row.tone === "new" ? "queue-status--new" : ""}`}
-                  >
-                    {row.status}
+                  <span className={`badge badge-${r.categorySlug}`}>{r.category}</span>
+                </td>
+                <td>{r.summary}</td>
+                <td className="queue-time">{r.location.coords}</td>
+                <td>
+                  <span className={`queue-status ${r.status === "New" ? "queue-status--new" : ""}`}>
+                    {r.status}
                   </span>
                 </td>
-                <td className="queue-time">{row.submitted}</td>
+                <td className="queue-time">{r.submittedShort}</td>
                 <td className="queue-chev"><ChevronRight size={16} /></td>
               </tr>
             ))}
+            {queue.length === 0 && (
+              <tr>
+                <td colSpan={7} style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>
+                  No reports in this stage.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
     </div>
   );
 }
+
+function buildStats(allReports, counts) {
+  const now = Date.now();
+  const dayMs = 24 * 60 * 60 * 1000;
+
+  const newToday = allReports.filter(
+    (r) => now - new Date(r.submittedAt).getTime() <= dayMs
+  ).length;
+  const newYesterday = allReports.filter((r) => {
+    const ago = now - new Date(r.submittedAt).getTime();
+    return ago > dayMs && ago <= 2 * dayMs;
+  }).length;
+  const delta = newToday - newYesterday;
+
+  const routedThisWeek = allReports.filter(
+    (r) => r.status === "Routed" && now - new Date(r.submittedAt).getTime() <= 7 * dayMs
+  ).length;
+
+  return [
+    {
+      label: "New today",
+      value: newToday,
+      delta: delta > 0 ? `+${delta} vs yesterday` : delta < 0 ? `${delta} vs yesterday` : "Same as yesterday",
+      tone: delta > 0 ? "up" : undefined,
+    },
+    {
+      label: "Open · in review",
+      value: counts.review,
+      delta: `${counts.review} active`,
+    },
+    {
+      label: "Awaiting routing",
+      value: counts.new,
+      delta: counts.new > 0 ? "Needs triage" : "Caught up",
+    },
+    {
+      label: "Routed · 7d",
+      value: routedThisWeek,
+      delta: routedThisWeek > 0 ? `+${routedThisWeek} this week` : "—",
+      tone: routedThisWeek > 0 ? "up" : undefined,
+    },
+    {
+      label: "Resolved",
+      value: counts.resolved,
+      delta: `${Math.round((counts.resolved / Math.max(counts.total, 1)) * 100)}% of total`,
+    },
+  ];
+}
+
