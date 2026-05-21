@@ -7,6 +7,7 @@ import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
 import Svg, { Path } from 'react-native-svg';
 import { setAuth } from '@/utils/storage';
+import { supabase } from '@/utils/supabase';
 
 const t = {
   bg: '#FAFAFA', card: '#FFFFFF', text: '#111', sub: '#888',
@@ -20,7 +21,9 @@ export default function AuthModal() {
   const [email, setEmail] = useState('');
   const [pass, setPass] = useState('');
   const [showPass, setShowPass] = useState(false);
-  const canSubmit = email.includes('@') && pass.length >= 4;
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const canSubmit = email.includes('@') && pass.length >= 6;
 
   const fadeIn = useRef(new Animated.Value(0)).current;
   const slideUp = useRef(new Animated.Value(16)).current;
@@ -33,9 +36,38 @@ export default function AuthModal() {
   }, []);
 
   const handleSubmit = async () => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    await setAuth('token-' + Date.now(), 'Reporter', email);
-    router.back();
+    if (!canSubmit || loading) return;
+    setLoading(true);
+    
+    try {
+      if (isSignUp) {
+        const { error } = await supabase.auth.signUp({
+          email,
+          password: pass,
+        });
+        if (error) throw error;
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        alert('Check your email for the confirmation link!');
+        setIsSignUp(false);
+      } else {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password: pass,
+        });
+        if (error) throw error;
+        
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        if (data.session) {
+          await setAuth(data.session.access_token, 'Citizen', email);
+          router.back();
+        }
+      }
+    } catch (err: any) {
+      alert(err.message);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const skip = () => {
@@ -93,11 +125,19 @@ export default function AuthModal() {
                 </TouchableOpacity>
               </View>
 
-              {/* Sign In */}
-              <TouchableOpacity activeOpacity={0.8} onPress={handleSubmit} disabled={!canSubmit} style={{
-                backgroundColor: canSubmit ? t.accent : t.fill, borderRadius: 14, paddingVertical: 16, alignItems: 'center',
+              {/* Sign In / Sign Up Button */}
+              <TouchableOpacity activeOpacity={0.8} onPress={handleSubmit} disabled={!canSubmit || loading} style={{
+                backgroundColor: canSubmit && !loading ? t.accent : t.fill, borderRadius: 14, paddingVertical: 16, alignItems: 'center',
               }}>
-                <Text style={{ color: canSubmit ? t.inv : t.hint, fontSize: 16, fontFamily: 'Manrope_600SemiBold' }}>Sign In</Text>
+                <Text style={{ color: canSubmit && !loading ? t.inv : t.hint, fontSize: 16, fontFamily: 'Manrope_600SemiBold' }}>
+                  {loading ? 'Please wait...' : (isSignUp ? 'Create Account' : 'Sign In')}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity activeOpacity={0.7} onPress={() => setIsSignUp(!isSignUp)} style={{ marginTop: 16, alignItems: 'center' }}>
+                <Text style={{ color: t.sub, fontSize: 14, fontFamily: 'Manrope_500Medium' }}>
+                  {isSignUp ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}
+                </Text>
               </TouchableOpacity>
 
               {/* Divider */}
