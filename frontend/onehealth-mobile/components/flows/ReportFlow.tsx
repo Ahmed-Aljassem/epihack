@@ -359,11 +359,11 @@ export default function ReportFlow({ onSignUp, onSubmitComplete }: { onSignUp?: 
                     borderWidth: 1.5, borderColor: on ? t.accent : 'transparent',
                   }}>
                   <View style={{
-                    width: 44, height: 44, borderRadius: 13,
+                    width: 52, height: 52, borderRadius: 16,
                     backgroundColor: on ? t.accentMid : t.fill,
                     alignItems: 'center', justifyContent: 'center',
                   }}>
-                    <Ionicons name={icon} size={20} color={on ? t.accent : t.sub} />
+                    <Ionicons name={icon} size={28} color={on ? t.accent : t.sub} />
                   </View>
                   <Text style={{ color: on ? t.text : t.sub, fontSize: 15, fontFamily: 'Manrope_600SemiBold' }}>{label}</Text>
                 </TouchableOpacity>
