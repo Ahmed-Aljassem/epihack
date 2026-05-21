@@ -5,30 +5,10 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from loguru import logger
 
 from app.config import get_settings
-from app.database import connect_db, close_db
-from app.routers import auth, surveys, responses, reports, alerts, dashboard, users
-from app.services.anomaly_detector import scan_for_anomalies
+from app.routers import auth, reports, dashboard
 
 settings = get_settings()
 scheduler = AsyncIOScheduler()
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Startup
-    await connect_db()
-    scheduler.add_job(
-        scan_for_anomalies,
-        "interval",
-        minutes=settings.ALERT_SCAN_INTERVAL_MINUTES,
-        id="anomaly_scan",
-    )
-    scheduler.start()
-    logger.info(f"🚀 Epidemic Radar API starting [{settings.ENVIRONMENT}]")
-    yield
-    # Shutdown
-    scheduler.shutdown()
-    await close_db()
 
 
 app = FastAPI(
@@ -40,7 +20,6 @@ app = FastAPI(
     version="0.1.0",
     docs_url="/docs",
     redoc_url="/redoc",
-    lifespan=lifespan,
 )
 
 # ── CORS ─────────────────────────────────────────────────────────
@@ -53,12 +32,8 @@ app.add_middleware(
 )
 
 # ── Routers ──────────────────────────────────────────────────────
-app.include_router(auth.router)
-app.include_router(users.router)
 app.include_router(reports.router)
-app.include_router(surveys.router)
-app.include_router(responses.router)
-app.include_router(alerts.router)
+##app.include_router(alerts.router)
 app.include_router(dashboard.router)
 
 

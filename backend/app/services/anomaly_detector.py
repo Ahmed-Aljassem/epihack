@@ -11,7 +11,6 @@ Algorithm (v0 — baseline, replace with more sophisticated models):
 from datetime import datetime, timezone, timedelta
 from loguru import logger
 import numpy as np
-from app.database import surveys_col, responses_col, alerts_col
 from app.models.enums import SurveyStatus, AlertSeverity, AlertStatus
 from app.config import get_settings
 
