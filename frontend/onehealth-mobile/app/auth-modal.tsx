@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView, Animated } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView, Animated, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
@@ -49,23 +49,26 @@ export default function AuthModal() {
         });
         if (error) throw error;
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        alert('Check your email for the confirmation link!');
+        Alert.alert('Success', 'Check your email for the confirmation link!');
         setIsSignUp(false);
       } else {
         const { data, error } = await supabase.auth.signInWithPassword({
-          email,
+          email: email.trim(),
           password: pass,
         });
         if (error) throw error;
         
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         if (data.session) {
-          await setAuth(data.session.access_token, 'Citizen', email);
-          router.back();
+          if (router.canGoBack()) {
+            router.back();
+          } else {
+            router.replace('/');
+          }
         }
       }
     } catch (err: any) {
-      alert(err.message);
+      Alert.alert('Login Error', err.message);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setLoading(false);
