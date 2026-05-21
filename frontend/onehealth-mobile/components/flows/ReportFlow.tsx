@@ -345,8 +345,8 @@ export default function ReportFlow({ onSignUp, onSubmitComplete }: { onSignUp?: 
 
           <View style={{ flexDirection: 'row', gap: 10 }}>
             {[
-              { id: 'sick', label: loc.sick, icon: 'thermometer-outline' as keyof typeof Ionicons.glyphMap },
-              { id: 'good', label: loc.good, icon: 'sunny-outline' as keyof typeof Ionicons.glyphMap },
+              { id: 'sick', label: loc.sick, icon: 'sad-outline' as keyof typeof Ionicons.glyphMap },
+              { id: 'good', label: loc.good, icon: 'happy-outline' as keyof typeof Ionicons.glyphMap },
             ].map(({ id, label, icon }) => {
               const on = feeling === id;
               return (
