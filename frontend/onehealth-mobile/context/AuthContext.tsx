@@ -31,12 +31,16 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     // Get initial session from storage
-    getUserProfile().then((profile) => {
-      if (profile.token) {
-        setUser(profile);
-      }
-      setLoading(false);
-    });
+    getUserProfile()
+      .then((profile) => {
+        if (profile.token) {
+          setUser(profile);
+        }
+      })
+      .catch((err) => console.error('Failed to load profile:', err))
+      .finally(() => {
+        setLoading(false);
+      });
   }, []);
 
   const signInUser = async (token: string, name: string, email: string) => {

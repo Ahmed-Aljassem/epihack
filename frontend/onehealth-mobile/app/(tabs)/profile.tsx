@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
-import { getUserProfile, getReportStats, getMyReports, clearAuth, getNotifsOn, setNotifsOn, SavedReport, getLang, setLang, getThemeMode, setThemeMode } from '@/utils/storage';
+import { getUserProfile, getReportStats, getMyReports, getNotifsOn, setNotifsOn, SavedReport, getThemeMode, setThemeMode } from '@/utils/storage';
 import { useLang, updateLang } from '@/utils/i18n';
 import { useAuth } from '@/context/AuthContext';
 
@@ -34,7 +34,7 @@ export default function ProfileScreen() {
     setThemeState(await getThemeMode());
   }, []);
 
-  useEffect(() => { load(); }, [user]);
+  useEffect(() => { load(); }, [user, load]);
   const isLoggedIn = !!user;
 
   const pick = (title: string, labels: string[], keys: string[], setter: (k: string) => void, saver: (k: string) => Promise<void>) => {
