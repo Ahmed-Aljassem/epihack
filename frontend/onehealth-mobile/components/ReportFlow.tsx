@@ -10,6 +10,8 @@ import * as Haptics from 'expo-haptics';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import { addReport, reportToHeatPoints } from '@/lib/reports';
 
 // ─── Theme — matches OneHealth splash ────────────────────────
 const P = {
@@ -183,6 +185,7 @@ export default function ReportFlow({ onSignUp }: { onSignUp?: () => void }) {
   const [otherSym, setOtherSym] = useState('');
   const [sickCount, setSickCount] = useState('1');
   const [zip, setZip] = useState('');
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [photo, setPhoto] = useState<string | null>(null);
   const [locL, setLocL] = useState(false);
   const [onset, setOnset] = useState('');
@@ -229,6 +232,7 @@ export default function ReportFlow({ onSignUp }: { onSignUp?: () => void }) {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') { Alert.alert('Permission needed'); setLocL(false); return; }
       const loc = await Location.getCurrentPositionAsync({});
+      setCoords({ lat: loc.coords.latitude, lng: loc.coords.longitude });
       const g = await Location.reverseGeocodeAsync(loc.coords);
       if (g[0]?.postalCode) setZip(g[0].postalCode);
     } catch { Alert.alert('Error', 'Could not detect location'); }
@@ -248,7 +252,7 @@ export default function ReportFlow({ onSignUp }: { onSignUp?: () => void }) {
       symptoms: symptoms.map(s => s.toLowerCase()),
       other_symptom_text: symptoms.includes('Other') ? otherSym : null,
       people_sick_count: parseInt(sickCount) || 1,
-      zip_code: zip, photo,
+      zip_code: zip, coords, photo,
       symptom_start: onset.toLowerCase(),
       professionally_diagnosed: diagnosed === 'Yes' ? true : diagnosed === 'No' ? false : null,
       diagnosis: diagnosed === 'Yes' ? diagName : null,
@@ -259,10 +263,11 @@ export default function ReportFlow({ onSignUp }: { onSignUp?: () => void }) {
       category: cats,
       observations,
       notes: goodNotes || null,
-      zip_code: zip,
+      zip_code: zip, coords,
       submitted_at: new Date().toISOString(), id: uid(),
     };
     console.log('Report:', JSON.stringify(payload, null, 2));
+    addReport(reportToHeatPoints(payload));
     go(step + 1);
   };
 
@@ -704,6 +709,7 @@ function Done({ t, mode, reset, onSignUp, loc }: { t: Th; mode: string; reset: (
           <Text style={{ fontFamily: 'Manrope_400Regular',  color: t.sub, fontSize: 12, marginTop: 2 }}>{loc.pima}</Text>
         </View>
         <TouchableOpacity activeOpacity={0.8}
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/map'); }}
           style={{ backgroundColor: t.card, borderRadius: 14, paddingVertical: 14, width: '100%', alignItems: 'center', marginBottom: 10, flexDirection: 'row', justifyContent: 'center', gap: 8 }}>
           <Ionicons name="map-outline" size={16} color={t.text} />
           <Text style={{ color: t.text, fontSize: 15, fontFamily: 'Manrope_500Medium' }}>{loc.view_map}</Text>
