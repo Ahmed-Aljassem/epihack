@@ -4,6 +4,11 @@ A **One Health** early-warning platform that collects participatory survey data
 across **human**, **animal**, and **environmental** domains, then applies
 automated anomaly detection to flag potential epidemic or pandemic signals.
 
+## Program Notes
+
+- Program author: EpiHack Arizona team
+- Program purpose: A modular One Health web platform for public reporting, agency triage, and early epidemic signal detection.
+
 ---
 
 ## Architecture
