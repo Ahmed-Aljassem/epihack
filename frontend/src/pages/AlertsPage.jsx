@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { Search, Plus, AlertTriangle, Edit2 } from "lucide-react";
 import { useAlerts, useMutation } from "../hooks/useData";
-import { alertsAPI } from "../services/api";
+import { alertsService } from "../services/dataSources";
 import { useAuth } from "../context/AuthContext";
 import { alertsService } from "../services/alertsService";
 

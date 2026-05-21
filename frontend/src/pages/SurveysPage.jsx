@@ -1,80 +1,123 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
+import { ClipboardList, Search, ChevronRight, Plus } from "lucide-react";
 import { useSurveys } from "../hooks/useData";
-import { ClipboardList, ChevronRight } from "lucide-react";
 
-const CATEGORIES = ["", "human", "animal", "environment", "vector"];
+const CATEGORY_FILTERS = [
+  { id: "",            label: "All domains" },
+  { id: "human",       label: "People" },
+  { id: "animal",      label: "Animals" },
+  { id: "environment", label: "Environment" },
+  { id: "vector",      label: "Vector" },
+];
 
 export default function SurveysPage() {
+  const navigate = useNavigate();
   const [category, setCategory] = useState("");
-  const { data: surveys, loading } = useSurveys(category ? { category } : {});
+  const [q, setQ] = useState("");
+  const { data: surveys, loading, error } = useSurveys(category ? { category } : {});
+
+  const filtered = (surveys || []).filter((s) => {
+    if (!q.trim()) return true;
+    const term = q.trim().toLowerCase();
+    return `${s.title} ${s.description} ${(s.tags || []).join(" ")}`.toLowerCase().includes(term);
+  });
 
   return (
     <div>
-      <div className="page-header">
-        <h1 className="page-title">Active Surveys</h1>
-        <p className="page-subtitle">Participate in surveillance across all domains</p>
+      <div className="console-header">
+        <div>
+          <h1 className="console-title">Surveys</h1>
+          <p className="console-subtitle">
+            Custom intake forms run by agency partners
+          </p>
+        </div>
+        <div className="console-actions">
+          <div className="search-wrap">
+            <Search size={14} />
+            <input
+              type="text"
+              className="search-input"
+              placeholder="Search surveys…"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+            />
+          </div>
+          <button className="btn btn-primary" disabled title="Survey authoring coming soon">
+            <Plus size={14} strokeWidth={2.4} />
+            New survey
+          </button>
+        </div>
       </div>
 
-      {/* Filter bar */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
-        {CATEGORIES.map((c) => (
+      <div className="filter-bar">
+        {CATEGORY_FILTERS.map((c) => (
           <button
-            key={c || "all"}
-            className={`btn ${category === c ? "btn-primary" : "btn-ghost"}`}
-            style={{ padding: "6px 14px", fontSize: 12 }}
-            onClick={() => setCategory(c)}
+            key={c.id || "all"}
+            className={`filter-chip ${category === c.id ? "is-active" : ""}`}
+            onClick={() => setCategory(c.id)}
           >
-            {c || "All Domains"}
+            {c.label}
           </button>
         ))}
       </div>
 
       {loading ? (
-        <div style={{ color: "var(--muted)", fontSize: 14 }}>Loading surveys…</div>
+        <div className="skeleton-block" style={{ height: 220 }} />
+      ) : error ? (
+        <div className="empty-state">
+          <div className="empty-state-title">Couldn't load surveys</div>
+          <div className="empty-state-copy">{error.message || String(error)}</div>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="empty-state">
+          <div className="empty-state-title">No surveys match your filters</div>
+          <div className="empty-state-copy">
+            Try a different category, or clear the search.
+          </div>
+        </div>
       ) : (
-        <div style={{ display: "grid", gap: 12 }}>
-          {(surveys || []).map((survey) => (
-            <Link
-              key={survey.id}
-              to={survey.id}
-              style={{ textDecoration: "none" }}
+        <div className="list-card">
+          {filtered.map((s) => (
+            <div
+              key={s.id}
+              className="list-row list-row--resource"
+              onClick={() => navigate(s.id)}
             >
-              <div className="card" style={{ display: "flex", alignItems: "center", gap: 16, cursor: "pointer", transition: "border-color 0.15s" }}
-                onMouseEnter={(e) => e.currentTarget.style.borderColor = "var(--accent)"}
-                onMouseLeave={(e) => e.currentTarget.style.borderColor = "var(--border)"}
-              >
-                <div style={{ width: 40, height: 40, borderRadius: 10, background: "var(--accent-dim)", display: "grid", placeItems: "center", flexShrink: 0 }}>
-                  <ClipboardList size={18} color="var(--accent)" />
+              <span className="list-icon">
+                <ClipboardList size={14} strokeWidth={2} />
+              </span>
+              <div>
+                <div className="list-title">{s.title}</div>
+                <div className="list-meta">{s.description}</div>
+                <div className="list-tags">
+                  <span className={`badge badge-${mapCat(s.category)}`}>{categoryLabel(s.category)}</span>
+                  <span className="badge">{s.response_count ?? 0} responses</span>
+                  <span className={`badge ${s.status === "paused" ? "badge-warn" : "badge-accent"}`}>
+                    {s.status || "active"}
+                  </span>
+                  {(s.tags || []).map((t) => (
+                    <span key={t} className="badge">#{t}</span>
+                  ))}
                 </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>{survey.title}</div>
-                  <div style={{ color: "var(--muted)", fontSize: 12, marginBottom: 6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {survey.description}
-                  </div>
-                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    <span className={`badge badge-${survey.category}`}>{survey.category}</span>
-                    <span style={{ color: "var(--muted)", fontSize: 11 }}>
-                      {survey.response_count} responses
-                    </span>
-                    {survey.tags?.map((t) => (
-                      <span key={t} style={{ fontSize: 10, color: "var(--muted)", background: "var(--surface-2)", borderRadius: 4, padding: "1px 6px" }}>
-                        #{t}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-                <ChevronRight size={16} color="var(--muted)" />
               </div>
-            </Link>
-          ))}
-          {!surveys?.length && (
-            <div className="card" style={{ color: "var(--muted)", textAlign: "center", padding: 40 }}>
-              No surveys found for this domain.
+              <ChevronRight size={16} className="list-chev" />
             </div>
-          )}
+          ))}
         </div>
       )}
     </div>
   );
+}
+
+// Map backend category enum -> badge slug used in CSS.
+function mapCat(c) {
+  return c === "human" ? "people" : c === "environment" ? "env" : c;
+}
+function categoryLabel(c) {
+  if (c === "human") return "People";
+  if (c === "environment") return "Environment";
+  if (c === "animal") return "Animal";
+  if (c === "vector") return "Vector";
+  return c;
 }

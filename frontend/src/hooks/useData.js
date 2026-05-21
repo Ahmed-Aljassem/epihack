@@ -1,6 +1,16 @@
+/*
+Domain hooks for surveys / responses / alerts / dashboard.
+
+All hooks talk to `services/dataSources` so the live-vs-mock decision
+is centralized. When backend endpoints land, flip the flags in
+`dataSources.js` — no changes here.
+*/
+
 import { useState, useEffect, useCallback } from "react";
-import { dashboardAPI, surveysAPI, alertsAPI, responsesAPI } from "../services/api";
 import toast from "react-hot-toast";
+import {
+  alertsService, surveysService, responsesService, dashboardService,
+} from "../services/dataSources";
 
 // ── Generic fetch hook ────────────────────────────────────────────
 export function useFetch(fetchFn, deps = []) {
@@ -12,7 +22,7 @@ export function useFetch(fetchFn, deps = []) {
     setLoading(true);
     try {
       const res = await fetchFn();
-      setData(res.data);
+      setData(res);
       setError(null);
     } catch (err) {
       setError(err);
@@ -27,27 +37,27 @@ export function useFetch(fetchFn, deps = []) {
 
 // ── Domain hooks ─────────────────────────────────────────────────
 export function useDashboardStats() {
-  return useFetch(() => dashboardAPI.stats());
+  return useFetch(() => dashboardService.stats());
 }
 
 export function useTrend(days = 7) {
-  return useFetch(() => dashboardAPI.trend(days), [days]);
+  return useFetch(() => dashboardService.trend(days), [days]);
 }
 
 export function useSurveys(params = {}) {
-  return useFetch(() => surveysAPI.list(params), [JSON.stringify(params)]);
+  return useFetch(() => surveysService.list(params), [JSON.stringify(params)]);
 }
 
 export function useSurvey(id) {
-  return useFetch(() => surveysAPI.get(id), [id]);
+  return useFetch(() => surveysService.get(id), [id]);
 }
 
 export function useAlerts(params = {}) {
-  return useFetch(() => alertsAPI.list(params), [JSON.stringify(params)]);
+  return useFetch(() => alertsService.list(params), [JSON.stringify(params)]);
 }
 
 export function useMyResponses() {
-  return useFetch(() => responsesAPI.mine());
+  return useFetch(() => responsesService.mine());
 }
 
 // ── Mutation helper ───────────────────────────────────────────────
@@ -59,10 +69,10 @@ export function useMutation(mutFn, { onSuccess, successMessage } = {}) {
     try {
       const res = await mutFn(...args);
       if (successMessage) toast.success(successMessage);
-      onSuccess?.(res.data);
-      return res.data;
+      onSuccess?.(res);
+      return res;
     } catch (err) {
-      const msg = err.response?.data?.detail || "Something went wrong";
+      const msg = err.response?.data?.detail || err.message || "Something went wrong";
       toast.error(typeof msg === "string" ? msg : JSON.stringify(msg));
       throw err;
     } finally {

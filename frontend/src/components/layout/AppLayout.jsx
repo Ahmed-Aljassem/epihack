@@ -1,7 +1,9 @@
+import { useEffect, useState } from "react";
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, FileText, Map, Mail,
-  BookOpen, Settings, Users, LogOut,
+  ClipboardList, Inbox,
+  BookOpen, Settings, Users, LogOut, Menu, X,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 
@@ -9,18 +11,25 @@ const NAV_GROUPS = [
   {
     label: "Triage",
     items: [
-      { to: "/agency/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-      { to: "/agency/reports", icon: FileText, label: "Reports" },
-      { to: "/agency/map", icon: Map, label: "Map" },
-      { to: "/agency/alerts", icon: Mail, label: "Alerts" },
+      { to: "/agency/dashboard", icon: LayoutDashboard, label: "Dashboard", end: true },
+      { to: "/agency/reports",   icon: FileText,        label: "Reports" },
+      { to: "/agency/map",       icon: Map,             label: "Map" },
+      { to: "/agency/alerts",    icon: Mail,            label: "Alerts" },
+    ],
+  },
+  {
+    label: "Surveys",
+    items: [
+      { to: "/agency/surveys",      icon: ClipboardList, label: "Surveys" },
+      { to: "/agency/my-responses", icon: Inbox,         label: "My responses" },
     ],
   },
   {
     label: "Library",
     items: [
       { to: "/agency/resources", icon: BookOpen, label: "Resources" },
-      { to: "/agency/routing", icon: Settings, label: "Routing rules" },
-      { to: "/agency/team", icon: Users, label: "Team" },
+      { to: "/agency/routing",   icon: Settings, label: "Routing rules" },
+      { to: "/agency/team",      icon: Users,    label: "Team" },
     ],
   },
 ];
@@ -28,11 +37,35 @@ const NAV_GROUPS = [
 export default function AppLayout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const [navOpen, setNavOpen] = useState(false);
 
   const handleLogout = () => {
     logout();
     navigate("/login");
   };
+
+  // Global shortcuts: '/' focuses the active page's search box; Esc blurs.
+  useEffect(() => {
+    const onKey = (e) => {
+      const tag = e.target?.tagName;
+      const inField = tag === "INPUT" || tag === "TEXTAREA" || e.target?.isContentEditable;
+
+      if (e.key === "/" && !inField) {
+        const input = document.querySelector(".search-input");
+        if (input) {
+          e.preventDefault();
+          input.focus();
+        }
+      } else if (e.key === "Escape") {
+        if (document.activeElement?.classList?.contains("search-input")) {
+          document.activeElement.blur();
+        }
+        setNavOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const initials = (user?.name || "U")
     .split(" ")
@@ -42,7 +75,16 @@ export default function AppLayout() {
     .toUpperCase();
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${navOpen ? "is-nav-open" : ""}`}>
+      <button
+        type="button"
+        className="nav-toggle"
+        onClick={() => setNavOpen((v) => !v)}
+        aria-label={navOpen ? "Close menu" : "Open menu"}
+      >
+        {navOpen ? <X size={18} /> : <Menu size={18} />}
+      </button>
+
       <aside className="sidebar">
         <div className="sidebar-brand">
           <span className="sidebar-brand-icon">OH</span>
@@ -52,10 +94,12 @@ export default function AppLayout() {
         {NAV_GROUPS.map((group) => (
           <div className="sidebar-group" key={group.label}>
             <div className="sidebar-group-label">{group.label}</div>
-            {group.items.map(({ to, icon: Icon, label }) => (
+            {group.items.map(({ to, icon: Icon, label, end }) => (
               <NavLink
                 key={to}
                 to={to}
+                end={end}
+                onClick={() => setNavOpen(false)}
                 className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}
               >
                 <Icon size={16} strokeWidth={1.8} />
@@ -80,6 +124,10 @@ export default function AppLayout() {
           </button>
         </div>
       </aside>
+
+      {navOpen && (
+        <div className="nav-backdrop" onClick={() => setNavOpen(false)} aria-hidden="true" />
+      )}
 
       <main className="main-content">
         <Outlet />

@@ -48,7 +48,29 @@ export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
-        <Toaster position="top-right" />
+        <Toaster
+          position="top-right"
+          gutter={8}
+          toastOptions={{
+            duration: 3000,
+            style: {
+              background: "#1d1d1f",
+              color: "#fafafa",
+              border: "1px solid rgba(255, 255, 255, 0.08)",
+              borderRadius: 12,
+              fontSize: 13,
+              fontWeight: 500,
+              padding: "10px 14px",
+              boxShadow: "0 10px 30px rgba(0, 0, 0, 0.18)",
+            },
+            success: {
+              iconTheme: { primary: "#34d399", secondary: "#0f1f17" },
+            },
+            error: {
+              iconTheme: { primary: "#f87171", secondary: "#1d0a0a" },
+            },
+          }}
+        />
         <Suspense fallback={<div className="loading-screen">Loading…</div>}>
           <Routes>
             {/* Public marketing landing */}
