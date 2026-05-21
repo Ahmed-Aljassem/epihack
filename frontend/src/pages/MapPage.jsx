@@ -1,21 +1,26 @@
 import { useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Search, ChevronRight, X, Download } from "lucide-react";
-import { REPORTS, CATEGORY_COLORS } from "../data/reports";
+import ReportFilters from "../components/console/ReportFilters";
+import { CATEGORY_COLORS } from "../data/reports";
 import { detectClusters } from "../lib/clusters";
 import { exportReportsCSV } from "../lib/csv";
+import {
+  DEFAULT_REPORT_FILTERS,
+  countReportsByCategory,
+  omitReportFilters,
+} from "../lib/reportFilters";
 import ReportsMap from "../components/console/ReportsMap";
-
-const FILTERS = [
-  { id: "all", label: "All categories" },
-  { id: "people", label: "People" },
-  { id: "animal", label: "Animal" },
-  { id: "env", label: "Environment" },
-  { id: "vector", label: "Vector" },
-];
-
-const RANGE_HOURS = { "24h": 24, "7d": 24 * 7, "30d": 24 * 30, All: Infinity };
-const RANGES = ["24h", "7d", "30d", "All"];
+import {
+  MAP_VIEW_MODES,
+  getMapModeDescription,
+} from "../components/console/mapViewModes";
+import {
+  useReports,
+  filtersFromSearchParams,
+  filtersToSearchParams,
+} from "../hooks/useReports";
+import { filterClient } from "../services/mocks/reports.mock";
 
 const LEGEND = [
   { key: "people", label: "People",      color: CATEGORY_COLORS.people },
@@ -23,44 +28,42 @@ const LEGEND = [
   { key: "env",    label: "Environment", color: CATEGORY_COLORS.env    },
   { key: "vector", label: "Vector",      color: CATEGORY_COLORS.vector },
 ];
+const MAP_DEFAULT_FILTERS = { ...DEFAULT_REPORT_FILTERS, range: "7d" };
 
 export default function MapPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [filter, setFilter] = useState("all");
-  const [range, setRange] = useState("7d");
-  const [q, setQ] = useState("");
-
+  const [mapMode, setMapMode] = useState("both");
+  const filters = filtersFromSearchParams(searchParams, MAP_DEFAULT_FILTERS);
   const clusterId = searchParams.get("cluster");
+  const { allReports, loading, error } = useReports();
+
   const activeCluster = useMemo(() => {
     if (!clusterId) return null;
-    return detectClusters(REPORTS).find((c) => c.id === clusterId) || null;
-  }, [clusterId]);
+    return detectClusters(allReports).find((c) => c.id === clusterId) || null;
+  }, [allReports, clusterId]);
 
   const visibleReports = useMemo(() => {
-    // Cluster mode: show only its members, ignore other filters.
-    if (activeCluster) {
-      const ids = new Set(activeCluster.memberIds);
-      return REPORTS.filter((r) => ids.has(r.id));
-    }
+    const activeFilters = activeCluster
+      ? { ids: activeCluster.memberIds }
+      : filters;
+    return filterClient(allReports, activeFilters);
+  }, [activeCluster, allReports, filters]);
 
-    const now = Date.now();
-    const cutoff = RANGE_HOURS[range] === Infinity
-      ? -Infinity
-      : now - RANGE_HOURS[range] * 60 * 60 * 1000;
-    const term = q.trim().toLowerCase();
+  const categoryCounts = useMemo(() => {
+    const scopedReports = filterClient(
+      allReports,
+      omitReportFilters(filters, ["category"]),
+    );
+    return countReportsByCategory(scopedReports);
+  }, [allReports, filters]);
 
-    return REPORTS.filter((r) => {
-      if (filter !== "all" && r.categorySlug !== filter) return false;
-      const ts = new Date(r.submittedAt).getTime();
-      if (ts < cutoff) return false;
-      if (term) {
-        const hay = `${r.id} ${r.category} ${r.summary} ${r.location.coords}`.toLowerCase();
-        if (!hay.includes(term)) return false;
-      }
-      return true;
-    });
-  }, [filter, range, q, activeCluster]);
+  const datasetCounts = useMemo(() => {
+    return visibleReports.reduce((acc, report) => {
+      acc[report.categorySlug] = (acc[report.categorySlug] || 0) + 1;
+      return acc;
+    }, { people: 0, animal: 0, env: 0, vector: 0 });
+  }, [visibleReports]);
 
   const mapView = activeCluster
     ? {
@@ -69,6 +72,22 @@ export default function MapPage() {
         zoom: 7.5,
       }
     : undefined;
+
+  const updateFilter = (patch) => {
+    const nextFilters = { ...filters, ...patch };
+    const nextSearchParams = new URLSearchParams(searchParams);
+
+    ["category", "range", "status", "county", "zip", "q"].forEach((key) => {
+      nextSearchParams.delete(key);
+    });
+
+    const filterParams = filtersToSearchParams(nextFilters);
+    filterParams.forEach((value, key) => {
+      nextSearchParams.set(key, value);
+    });
+
+    setSearchParams(nextSearchParams, { replace: true });
+  };
 
   const clearCluster = () => {
     const next = new URLSearchParams(searchParams);
@@ -91,9 +110,10 @@ export default function MapPage() {
             <input
               type="text"
               className="search-input"
-              placeholder="Search places, ZIP, IDs…"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
+              placeholder={activeCluster ? "Cluster view is locked to its detected reports" : "Search places, ZIPs, counties, IDs…"}
+              value={filters.q}
+              onChange={(e) => updateFilter({ q: e.target.value })}
+              disabled={Boolean(activeCluster)}
             />
           </div>
           <button
@@ -129,50 +149,57 @@ export default function MapPage() {
       )}
 
       {!activeCluster && (
-        <div className="filter-bar">
-          {FILTERS.map((f) => (
-            <button
-              key={f.id}
-              className={`filter-chip ${filter === f.id ? "is-active" : ""}`}
-              onClick={() => setFilter(f.id)}
-            >
-              {f.label}
-            </button>
-          ))}
-          <span style={{ marginLeft: "auto" }} />
-          <div className="range-tabs">
-            {RANGES.map((r) => (
-              <button
-                key={r}
-                className={`range-tab ${range === r ? "is-active" : ""}`}
-                onClick={() => setRange(r)}
-              >
-                {r}
-              </button>
-            ))}
-          </div>
-        </div>
+        <ReportFilters
+          filters={filters}
+          onChange={updateFilter}
+          optionReports={allReports}
+          categoryCounts={categoryCounts}
+          resultCount={visibleReports.length}
+          showStatus
+          onClear={() => updateFilter(MAP_DEFAULT_FILTERS)}
+        />
       )}
 
       <div className="console-grid-2" style={{ gridTemplateColumns: "1.7fr 1fr" }}>
         <div className="card map-card">
+          <div className="map-card-header">
+            <div>
+              <div className="map-card-title">Spatial view</div>
+              <div className="map-card-subtitle">
+                Switch between exact report locations and overall density.
+              </div>
+            </div>
+            <div className="range-tabs" aria-label="Map view mode">
+              {MAP_VIEW_MODES.map((mode) => (
+                <button
+                  key={mode.id}
+                  className={`range-tab ${mapMode === mode.id ? "is-active" : ""}`}
+                  onClick={() => setMapMode(mode.id)}
+                >
+                  {mode.label}
+                </button>
+              ))}
+            </div>
+          </div>
           <ReportsMap
             key={activeCluster?.id || "default"}
             reports={visibleReports}
             height={520}
             initialView={mapView}
+            viewMode={mapMode}
             onSelectReport={(id) => {
               void id;
             }}
           />
+          <div className="map-mode-note">{getMapModeDescription(mapMode)}</div>
           <div className="map-legend">
-            {Object.entries(TYPE_META).map(([type, meta]) => (
-              <span key={type} className="map-legend-item">
+            {LEGEND.map((meta) => (
+              <span key={meta.key} className="map-legend-item">
                 <span
                   className="map-legend-dot"
                   style={{ background: meta.color }}
                 />
-                {meta.label} · {datasetCounts[type] || 0}
+                {meta.label} · {datasetCounts[meta.key] || 0}
               </span>
             ))}
           </div>
@@ -211,7 +238,11 @@ export default function MapPage() {
                 {visibleReports.length === 0 && (
                   <tr>
                     <td colSpan={4} style={{ padding: 24, color: "var(--muted)", textAlign: "center" }}>
-                      No reports match the current filters.
+                      {loading
+                        ? "Loading reports…"
+                        : error
+                          ? "Couldn't load reports for the map."
+                          : "No reports match the current filters."}
                     </td>
                   </tr>
                 )}

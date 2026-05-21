@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Search, ChevronRight, RefreshCw, Download } from "lucide-react";
+import ReportFilters from "../components/console/ReportFilters";
 import {
   useReports,
   filtersFromSearchParams,
@@ -8,14 +9,13 @@ import {
 } from "../hooks/useReports";
 import { useTickingAgo } from "../hooks/useTickingAgo";
 import { exportReportsCSV } from "../lib/csv";
-
-const CATEGORY_CHIPS = [
-  { id: "all",    label: "All" },
-  { id: "people", label: "People" },
-  { id: "animal", label: "Animal" },
-  { id: "env",    label: "Environment" },
-  { id: "vector", label: "Vector" },
-];
+import {
+  DEFAULT_REPORT_FILTERS,
+  countReportsByCategory,
+  hasActiveReportFilters,
+  omitReportFilters,
+} from "../lib/reportFilters";
+import { filterClient } from "../services/mocks/reports.mock";
 
 const STATUS_TABS = [
   { id: "",         label: "All" },
@@ -30,7 +30,17 @@ export default function ReportsListPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const filters = filtersFromSearchParams(searchParams);
 
-  const { reports, counts, lastUpdatedAt, refresh, loading, error } = useReports({ filters });
+  const {
+    reports,
+    allReports,
+    counts,
+    scopedCounts,
+    allCounts,
+    lastUpdatedAt,
+    refresh,
+    loading,
+    error,
+  } = useReports({ filters });
 
   const updateFilter = (patch) => {
     const next = { ...filters, ...patch };
@@ -38,14 +48,22 @@ export default function ReportsListPage() {
   };
 
   const lastUpdatedLabel = useTickingAgo(lastUpdatedAt);
+  const hasFilters = hasActiveReportFilters(filters);
+  const categoryCounts = useMemo(() => {
+    const scopedReports = filterClient(
+      allReports,
+      omitReportFilters(filters, ["category"]),
+    );
+    return countReportsByCategory(scopedReports);
+  }, [allReports, filters]);
 
   const statusCounts = useMemo(() => ({
-    "":         counts.total,
-    new:        counts.new,
-    review:     counts.review,
-    routed:     counts.routed,
-    resolved:   counts.resolved,
-  }), [counts]);
+    "": scopedCounts.total,
+    new: scopedCounts.new,
+    review: scopedCounts.review,
+    routed: scopedCounts.routed,
+    resolved: scopedCounts.resolved,
+  }), [scopedCounts]);
 
   return (
     <div>
@@ -53,7 +71,9 @@ export default function ReportsListPage() {
         <div>
           <h1 className="console-title">Reports</h1>
           <p className="console-subtitle">
-            All mobile-app submissions across triage stages · {counts.total} total
+            All mobile-app submissions across triage stages · {hasFilters
+              ? `${counts.total} in view of ${allCounts.total} total`
+              : `${allCounts.total} total`}
           </p>
         </div>
         <div className="console-actions">
@@ -62,7 +82,7 @@ export default function ReportsListPage() {
             <input
               type="text"
               className="search-input"
-              placeholder="Search reports, places, IDs…"
+              placeholder="Search reports, ZIPs, counties, IDs…"
               value={filters.q}
               onChange={(e) => updateFilter({ q: e.target.value })}
             />
@@ -92,17 +112,18 @@ export default function ReportsListPage() {
         </div>
       </div>
 
-      <div className="filter-bar">
-        {CATEGORY_CHIPS.map((c) => (
-          <button
-            key={c.id}
-            className={`filter-chip ${filters.category === c.id ? "is-active" : ""}`}
-            onClick={() => updateFilter({ category: c.id })}
-          >
-            {c.label}
-          </button>
-        ))}
-      </div>
+      <ReportFilters
+        filters={filters}
+        onChange={updateFilter}
+        optionReports={allReports}
+        categoryCounts={categoryCounts}
+        resultCount={reports.length}
+        onClear={() => {
+          setSearchParams(filtersToSearchParams(DEFAULT_REPORT_FILTERS), {
+            replace: true,
+          });
+        }}
+      />
 
       <div className="card queue-card">
         <div className="queue-header">
@@ -129,7 +150,7 @@ export default function ReportsListPage() {
               <th>ID</th>
               <th>Category</th>
               <th>Summary</th>
-              <th>Coords</th>
+              <th>ZIP</th>
               <th>Status</th>
               <th>Submitted</th>
               <th />
@@ -143,7 +164,7 @@ export default function ReportsListPage() {
                   <span className={`badge badge-${r.categorySlug}`}>{r.category}</span>
                 </td>
                 <td>{r.summary}</td>
-                <td className="queue-time">{r.location.coords}</td>
+                <td className="queue-time">{r.location.zip}</td>
                 <td>
                   <span className={`queue-status ${r.status === "New" ? "queue-status--new" : ""}`}>
                     {r.status}

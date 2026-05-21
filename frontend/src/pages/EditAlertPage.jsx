@@ -35,7 +35,14 @@ function normalizeCategory(c) {
 }
 
 function normalizeChannel(c) {
-  return c.charAt(0).toUpperCase() + c.slice(1);
+  const map = {
+    web: "Web",
+    sms: "SMS",
+    email: "Email",
+    "printable flyer": "Printable flyer",
+    "social copy": "Social copy",
+  };
+  return map[c] || c;
 }
 
 export default function EditAlertPage() {

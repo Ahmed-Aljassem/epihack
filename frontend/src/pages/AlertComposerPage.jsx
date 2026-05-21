@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Search, ArrowRight, Plus } from "lucide-react";
 import { alertsService } from "../services/alertsService";
@@ -35,10 +35,16 @@ export default function AlertComposerPage() {
     category: "People",
     target: "",
     message: "",
-    actions: [],
+    actions: DEFAULT_ACTIONS,
     channels: ["Web"],
+    linkedReports: [],
   });
+  const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
+
+  const smsPreview = useMemo(() => buildSmsPreview(form), [form]);
+  const smsLen = smsPreview.length;
+  const smsOver = smsLen > SMS_LIMIT;
 
   const toggleChannel = (c) => {
     setForm((f) => ({
@@ -50,8 +56,23 @@ export default function AlertComposerPage() {
   };
 
   const handleSubmit = async () => {
+    const nextErrors = {};
+    if (!form.title.trim()) nextErrors.title = "Add a title before sending.";
+    if (!form.message.trim()) nextErrors.message = "Add a message for the public.";
+    if (form.channels.length === 0) nextErrors.channels = "Choose at least one delivery channel.";
+    if (smsOver && form.channels.includes("SMS")) {
+      nextErrors.message = `SMS copy needs to stay within ${SMS_LIMIT} characters.`;
+    }
+
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors);
+      return;
+    }
+
     setSaving(true);
     try {
+      setErrors({});
+
       // Parse target locations from the string (split by · or ,)
       const targetLocations = form.target
         .split(/[·,]/)
@@ -80,14 +101,14 @@ export default function AlertComposerPage() {
       // Create alert object
       const alertData = {
         severity: severityMap[form.severity] || "medium",
-        status: "open",
+        status: form.status,
         category: categoryMap[form.category] || "people",
         title: form.title,
         description: form.message,
         targetLocations,
         recommendedActions: form.actions,
         channels: normalizedChannels,
-        linkedReports: [], // Can be populated later
+        linkedReports: form.linkedReports,
       };
 
       // Save using the service
@@ -282,11 +303,7 @@ export default function AlertComposerPage() {
                 ≤ {SMS_LIMIT} chars
               </span>
             </div>
-            <div className="preview-body">
-              [One Health AZ] Mosquito activity ↑ in NW Pima. Drain standing
-              water, use repellent dawn/dusk. Fever+rash? Contact a provider.
-              Info: oh.az/alerts/24
-            </div>
+            <div className="preview-body">{smsPreview}</div>
           </div>
 
           <div className="preview-block">
@@ -316,35 +333,4 @@ export default function AlertComposerPage() {
       </div>
     </div>
   );
-}
-
-function derivePrefill(searchParams) {
-  const out = {};
-  const reportId = searchParams.get("report");
-  const clusterId = searchParams.get("cluster");
-
-  if (reportId) {
-    const r = REPORTS.find((x) => x.id === reportId);
-    if (r) {
-      out.title = `${r.category} report · ${r.summary}`;
-      out.category = r.categorySlug === "env" ? "environment" : r.categorySlug === "people" ? "people" : r.categorySlug;
-      out.linkedReports = [r.id];
-      out.target = r.location?.zip || "";
-    }
-  }
-
-  if (clusterId) {
-    const cluster = detectClusters(REPORTS).find((c) => c.id === clusterId);
-    if (cluster) {
-      out.title = `${cluster.count} ${cluster.category.toLowerCase()} reports — emerging cluster`;
-      out.category = cluster.categorySlug === "env" ? "environment" : cluster.categorySlug;
-      out.linkedReports = cluster.memberIds;
-    }
-  }
-
-  return out;
-}
-
-function capitalize(s) {
-  return s ? s[0].toUpperCase() + s.slice(1) : s;
 }

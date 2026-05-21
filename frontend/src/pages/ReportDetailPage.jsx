@@ -61,7 +61,7 @@ export default function ReportDetailPage() {
     return [...base, ...noteEvents];
   }, [report]);
 
-  if (loading || !report) {
+  if (loading) {
     return (
       <div>
         <div className="console-header">
@@ -83,6 +83,19 @@ export default function ReportDetailPage() {
           <div>
             <h1 className="console-title">Couldn't load this report</h1>
             <p className="console-subtitle">{error.message || String(error)}</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!report) {
+    return (
+      <div>
+        <div className="console-header">
+          <div>
+            <h1 className="console-title">Report not found</h1>
+            <p className="console-subtitle">{id}</p>
           </div>
         </div>
       </div>
@@ -223,7 +236,9 @@ export default function ReportDetailPage() {
                 />
               </div>
               <div className="attach-foot">
-                <span><MapPin size={12} /> {report.location?.coords || "—"} · approx.</span>
+                <span>
+                  <MapPin size={12} /> {report.location?.coords || "—"} · ZIP {report.location?.zip || "—"}
+                </span>
                 <a
                   href={`https://www.google.com/maps?q=${report.latitude},${report.longitude}`}
                   target="_blank"

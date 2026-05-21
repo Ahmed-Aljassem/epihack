@@ -1,12 +1,13 @@
 /*
-Enriches the bare {id, type, longitude, latitude} mock dataset into the
-shape the UI needs (category label, status, submittedAt, summary, etc.).
+Enriches mock reports into the shape the UI needs
+(category label, status, submittedAt, exact point + mapped ZIP, summary, etc.).
 
 Three rich records (RPT-1024 / 1023 / 1022) are kept for the detail page,
 which expects description / activity / routing / facts.
 */
 
 import RAW from "./reports.json";
+import { resolveArizonaLocation } from "./arizonaZips";
 
 // ── Category mapping ────────────────────────────────────────────────
 // `type` from mock data -> display label + UI slug
@@ -51,6 +52,7 @@ const SUMMARY_TEMPLATES = {
 };
 
 function enrich(raw) {
+  const normalizedLocation = resolveArizonaLocation(raw);
   const slug = CATEGORY_SLUG[raw.type] || "people";
   const label = CATEGORY_LABEL[raw.type] || "People";
 
@@ -60,18 +62,20 @@ function enrich(raw) {
   // Deterministic timestamp spread over the past 7 days.
   // Multiplier mixes id to avoid the "every 4th id has identical minute" pattern.
   const minutesAgo = (raw.id * 137) % (7 * 24 * 60);
-  const submittedAtDate = new Date(Date.now() - minutesAgo * 60_000);
+  const submittedAtDate = new Date(ANCHOR - minutesAgo * 60_000);
 
   const reportId = `RPT-${1000 + raw.id}`;
-  const coords = `${raw.latitude.toFixed(3)}, ${raw.longitude.toFixed(3)}`;
 
   return {
     // Original fields preserved
     id: reportId,
     rawId: raw.id,
     type: raw.type,
-    longitude: raw.longitude,
-    latitude: raw.latitude,
+    zip: normalizedLocation.zip,
+    county: normalizedLocation.county,
+    city: normalizedLocation.city,
+    longitude: normalizedLocation.longitude,
+    latitude: normalizedLocation.latitude,
 
     // Derived UI fields
     category: label,
@@ -82,8 +86,16 @@ function enrich(raw) {
     submittedAt: submittedAtDate.toISOString(),
     submittedShort: submittedAtDate.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }),
 
-    // Back-compat shape for existing pages
-    location: { zip: "—", county: "Arizona", coords },
+    // User-facing location keeps both the mapped Arizona ZIP and the exact
+    // coordinates when the source provided them.
+    location: {
+      zip: normalizedLocation.zip,
+      county: normalizedLocation.county,
+      city: normalizedLocation.city,
+      coords: normalizedLocation.coords,
+      hasExactCoordinates: normalizedLocation.hasExactCoordinates,
+      precision: normalizedLocation.precision,
+    },
   };
 }
 
@@ -96,7 +108,7 @@ export const RICH_DETAILS = {
   "RPT-1024": {
     summary: "Coyote, unsteady in pasture",
     subcategory: "sick",
-    location: { zip: "85719", county: "Pima Co.", coords: "32.286, -110.987" },
+    location: { zip: "85719", county: "Pima Co.", city: "Tucson" },
     submittedLabel: "Today · 2:14 PM",
     submittedShort: "2:14 PM",
     tags: ["Animal · sick", "Anonymous", "Opted-in SMS"],
@@ -124,19 +136,44 @@ export const RICH_DETAILS = {
   },
   "RPT-1023": {
     summary: "Fever cluster · 3 households",
-    location: { zip: "85735", county: "Pima Co.", coords: "—" },
+    location: { zip: "85735", county: "Pima Co.", city: "Tucson" },
     submittedLabel: "Today · 1:48 PM",
     submittedShort: "1:48 PM",
     tags: ["People · fever", "Self-reported"],
   },
   "RPT-1022": {
     summary: "Mosquito activity ↑",
-    location: { zip: "85705", county: "Pima Co.", coords: "—" },
+    location: { zip: "85705", county: "Pima Co.", city: "Tucson" },
     submittedLabel: "Today · 12:31 PM",
     submittedShort: "12:31 PM",
     tags: ["Vector", "Pattern · rising"],
   },
 };
+
+function withResolvedLocation(report) {
+  const normalizedLocation = resolveArizonaLocation({
+    zip: report.location?.zip || report.zip,
+    latitude: report.latitude,
+    longitude: report.longitude,
+  });
+
+  return {
+    ...report,
+    zip: normalizedLocation.zip,
+    county: normalizedLocation.county,
+    city: normalizedLocation.city,
+    longitude: normalizedLocation.longitude,
+    latitude: normalizedLocation.latitude,
+    location: {
+      zip: normalizedLocation.zip,
+      county: normalizedLocation.county,
+      city: normalizedLocation.city,
+      coords: normalizedLocation.coords,
+      hasExactCoordinates: normalizedLocation.hasExactCoordinates,
+      precision: normalizedLocation.precision,
+    },
+  };
+}
 
 // Lookup that merges the enriched record + any rich detail overlay.
 export function getReport(id) {
@@ -144,7 +181,7 @@ export function getReport(id) {
   if (!base) {
     // Fall back to the first record so the detail page never 404s in demos.
     const fallback = REPORTS[0];
-    return { ...fallback, ...(RICH_DETAILS[fallback.id] || {}) };
+    return withResolvedLocation({ ...fallback, ...(RICH_DETAILS[fallback.id] || {}) });
   }
-  return { ...base, ...(RICH_DETAILS[id] || {}) };
+  return withResolvedLocation({ ...base, ...(RICH_DETAILS[id] || {}) });
 }

@@ -1,11 +1,23 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Search, Plus, ChevronRight, RefreshCw } from "lucide-react";
+import ReportFilters from "../components/console/ReportFilters";
 import { CATEGORY_COLORS } from "../data/reports";
 import { useReports } from "../hooks/useReports";
 import { useTickingAgo } from "../hooks/useTickingAgo";
 import { detectClusters } from "../lib/clusters";
+import {
+  DEFAULT_REPORT_FILTERS,
+  countReportsByCategory,
+  hasActiveReportFilters,
+  omitReportFilters,
+} from "../lib/reportFilters";
 import ReportsMap from "../components/console/ReportsMap";
+import {
+  MAP_VIEW_MODES,
+  getMapModeDescription,
+} from "../components/console/mapViewModes";
+import { filterClient } from "../services/mocks/reports.mock";
 
 const LEGEND_DEFS = [
   { key: "people", label: "People",      color: CATEGORY_COLORS.people },
@@ -28,23 +40,37 @@ const STATUS_FILTER_TO_LABEL = {
   resolved: "Resolved",
 };
 
-const MAP_RANGE_HOURS = { "7d": 24 * 7, "30d": 24 * 30, All: Infinity };
-
 export default function DashboardPage() {
   const navigate = useNavigate();
-  const [range, setRange] = useState("All");
+  const [filters, setFilters] = useState(DEFAULT_REPORT_FILTERS);
+  const [mapMode, setMapMode] = useState("both");
   const [tab, setTab] = useState("new");
 
-  const { allReports, counts, lastUpdatedAt, refresh, loading } = useReports();
+  const {
+    reports,
+    allReports,
+    counts,
+    scopedCounts,
+    allCounts,
+    lastUpdatedAt,
+    refresh,
+    loading,
+  } = useReports({ filters });
   const ago = useTickingAgo(lastUpdatedAt, { compact: true });
+  const hasFilters = hasActiveReportFilters(filters, { includeStatus: false });
 
-  // Map slice — filtered by date range.
-  const mapReports = useMemo(() => {
-    const hours = MAP_RANGE_HOURS[range] ?? Infinity;
-    if (hours === Infinity) return allReports;
-    const cutoff = Date.now() - hours * 60 * 60 * 1000;
-    return allReports.filter((r) => new Date(r.submittedAt).getTime() >= cutoff);
-  }, [allReports, range]);
+  const updateFilter = (patch) => {
+    setFilters((current) => ({ ...current, ...patch }));
+  };
+
+  const mapReports = reports;
+  const categoryCounts = useMemo(() => {
+    const scopedReports = filterClient(
+      allReports,
+      omitReportFilters(filters, ["category"]),
+    );
+    return countReportsByCategory(scopedReports);
+  }, [allReports, filters]);
 
   const legendCounts = useMemo(() => {
     const acc = { people: 0, animal: 0, env: 0, vector: 0 };
@@ -55,20 +81,20 @@ export default function DashboardPage() {
   }, [mapReports]);
 
   // Stats — derived from live data.
-  const stats = useMemo(() => buildStats(allReports, counts), [allReports, counts]);
+  const stats = useMemo(() => buildStats(reports, counts), [reports, counts]);
 
   // Clusters — first one (largest) drives the dashboard card.
-  const clusters = useMemo(() => detectClusters(allReports), [allReports]);
+  const clusters = useMemo(() => detectClusters(reports), [reports]);
   const topCluster = clusters[0];
 
   // Queue — first 6 reports matching the selected status tab.
   const queue = useMemo(() => {
     const targetLabel = STATUS_FILTER_TO_LABEL[tab];
-    return allReports
+    return reports
       .filter((r) => r.status === targetLabel)
       .sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt))
       .slice(0, 6);
-  }, [allReports, tab]);
+  }, [reports, tab]);
 
   return (
     <div>
@@ -76,7 +102,9 @@ export default function DashboardPage() {
         <div>
           <h1 className="console-title">Dashboard</h1>
           <p className="console-subtitle">
-            Arizona surveillance · {allReports.length} reports tracked
+            Arizona surveillance · {hasFilters
+              ? `${reports.length} in view of ${allCounts.total} total`
+              : `${allCounts.total} reports tracked`}
           </p>
         </div>
         <div className="console-actions">
@@ -85,8 +113,9 @@ export default function DashboardPage() {
             <input
               type="text"
               className="search-input"
-              placeholder="Search reports, places, IDs…"
-              onFocus={() => navigate("/agency/reports")}
+              placeholder="Search reports, ZIPs, counties, IDs…"
+              value={filters.q}
+              onChange={(event) => updateFilter({ q: event.target.value })}
             />
           </div>
           <button
@@ -112,6 +141,17 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      <ReportFilters
+        filters={filters}
+        onChange={updateFilter}
+        optionReports={allReports}
+        categoryCounts={categoryCounts}
+        resultCount={reports.length}
+        showRange={false}
+        showStatus={false}
+        onClear={() => setFilters(DEFAULT_REPORT_FILTERS)}
+      />
+
       <div className="stat-row">
         {stats.map((s) => (
           <div key={s.label} className="stat-card">
@@ -127,20 +167,39 @@ export default function DashboardPage() {
       <div className="console-grid-2">
         <div className="card map-card">
           <div className="map-card-header">
-            <div className="map-card-title">Reports map</div>
-            <div className="range-tabs">
-              {["All", "7d", "30d"].map((r) => (
-                <button
-                  key={r}
-                  className={`range-tab ${range === r ? "is-active" : ""}`}
-                  onClick={() => setRange(r)}
-                >
-                  {r}
-                </button>
-              ))}
+            <div>
+              <div className="map-card-title">Reports map</div>
+              <div className="map-card-subtitle">
+                Switch between exact report locations and overall density.
+              </div>
+            </div>
+            <div className="map-card-controls">
+              <div className="range-tabs" aria-label="Dashboard map date range">
+                {["All", "7d", "30d"].map((r) => (
+                  <button
+                    key={r}
+                    className={`range-tab ${filters.range === r ? "is-active" : ""}`}
+                    onClick={() => updateFilter({ range: r })}
+                  >
+                    {r}
+                  </button>
+                ))}
+              </div>
+              <div className="range-tabs" aria-label="Dashboard map view mode">
+                {MAP_VIEW_MODES.map((mode) => (
+                  <button
+                    key={mode.id}
+                    className={`range-tab ${mapMode === mode.id ? "is-active" : ""}`}
+                    onClick={() => setMapMode(mode.id)}
+                  >
+                    {mode.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
-          <ReportsMap reports={mapReports} height={280} />
+          <ReportsMap reports={mapReports} height={280} viewMode={mapMode} />
+          <div className="map-mode-note">{getMapModeDescription(mapMode)}</div>
           <div className="map-legend">
             {LEGEND_DEFS.map((l) => {
               const count = legendCounts[l.key] || 0;
@@ -165,8 +224,8 @@ export default function DashboardPage() {
               </div>
               <p className="cluster-copy">
                 {topCluster.count} reports within ~{topCluster.radiusMi} mi over the
-                last {topCluster.windowDays} days. Centroid {topCluster.centroid.latitude.toFixed(2)},{" "}
-                {topCluster.centroid.longitude.toFixed(2)}.
+                last {topCluster.windowDays} days. ZIP coverage {topCluster.zipSummary}
+                {topCluster.zipCount > 3 ? ` + ${topCluster.zipCount - 3} more` : ""}.
               </p>
               <div className="cluster-actions">
                 <button
@@ -203,7 +262,7 @@ export default function DashboardPage() {
           <div className="map-card-title">Triage queue</div>
           <div className="queue-tabs">
             {QUEUE_TABS.map((t) => {
-              const n = counts[t.id] ?? 0;
+              const n = scopedCounts[t.id] ?? 0;
               return (
                 <button
                   key={t.id}
@@ -223,7 +282,7 @@ export default function DashboardPage() {
               <th>ID</th>
               <th>Category</th>
               <th>Summary</th>
-              <th>Coords</th>
+              <th>ZIP</th>
               <th>Status</th>
               <th>Submitted</th>
               <th />
@@ -237,7 +296,7 @@ export default function DashboardPage() {
                   <span className={`badge badge-${r.categorySlug}`}>{r.category}</span>
                 </td>
                 <td>{r.summary}</td>
-                <td className="queue-time">{r.location.coords}</td>
+                <td className="queue-time">{r.location.zip}</td>
                 <td>
                   <span className={`queue-status ${r.status === "New" ? "queue-status--new" : ""}`}>
                     {r.status}
@@ -308,4 +367,3 @@ function buildStats(allReports, counts) {
     },
   ];
 }
-

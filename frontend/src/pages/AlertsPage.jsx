@@ -2,9 +2,6 @@ import { useMemo, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { Search, Plus, AlertTriangle, Edit2 } from "lucide-react";
-import { useAlerts, useMutation } from "../hooks/useData";
-import { alertsService } from "../services/dataSources";
-import { useAuth } from "../context/AuthContext";
 import { alertsService } from "../services/alertsService";
 
 const SEVERITY_FILTERS = [
@@ -24,7 +21,6 @@ const STATUS_FILTERS = [
 
 export default function AlertsPage() {
   const navigate = useNavigate();
-  const { isAnalyst } = useAuth();
   const [severity, setSeverity] = useState("");
   const [status, setStatus] = useState("open");
   const [alerts, setAlerts] = useState([]);

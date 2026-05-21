@@ -2,8 +2,8 @@
 React hook layer over `reportsService` (mock or live API based on the
 `SOURCES` flag in `services/dataSources.js`).
 
-`useReports({ filters })` -> { reports, allReports, counts, lastUpdatedAt,
-loading, error, refresh, mutate*() }
+`useReports({ filters })` -> { reports, allReports, counts, scopedCounts,
+allCounts, lastUpdatedAt, loading, error, refresh, mutate*() }
 
 `useReport(id)` -> { report, loading, error, refresh }
 
@@ -15,6 +15,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import { reportsService } from "../services/dataSources";
 import { filterClient, countByStatus, subscribe } from "../services/mocks/reports.mock";
+import { normalizeReportFilters, omitReportFilters } from "../lib/reportFilters";
 
 const POLL_MS = 30_000;
 
@@ -57,13 +58,28 @@ export function useReports({ filters = {} } = {}) {
     return subscribe(refresh);
   }, [refresh]);
 
-  const reports = useMemo(() => filterClient(all, filters), [all, filters]);
-  const counts = useMemo(() => countByStatus(all), [all]);
+  const normalizedFilters = useMemo(
+    () => normalizeReportFilters(filters),
+    [filters],
+  );
+  const reports = useMemo(
+    () => filterClient(all, normalizedFilters),
+    [all, normalizedFilters],
+  );
+  const scopedReports = useMemo(
+    () => filterClient(all, omitReportFilters(normalizedFilters, ["status"])),
+    [all, normalizedFilters],
+  );
+  const counts = useMemo(() => countByStatus(reports), [reports]);
+  const scopedCounts = useMemo(() => countByStatus(scopedReports), [scopedReports]);
+  const allCounts = useMemo(() => countByStatus(all), [all]);
 
   return {
     reports,
     allReports: all,
     counts,
+    scopedCounts,
+    allCounts,
     loading,
     error,
     lastUpdatedAt,
@@ -138,20 +154,26 @@ export async function reassign(id, assignee) {
 
 // ── URL-sync helpers (used by ReportsListPage / MapPage) ────────────
 
-export function filtersFromSearchParams(searchParams) {
-  return {
-    category: searchParams.get("category") || "all",
-    range:    searchParams.get("range")    || "All",
-    status:   searchParams.get("status")   || "",
-    q:        searchParams.get("q")        || "",
-  };
+export function filtersFromSearchParams(searchParams, defaults = {}) {
+  return normalizeReportFilters({
+    ...defaults,
+    category: searchParams.get("category") || defaults.category,
+    range: searchParams.get("range") || defaults.range,
+    status: searchParams.get("status") || defaults.status,
+    county: searchParams.get("county") || defaults.county,
+    zip: searchParams.get("zip") || defaults.zip,
+    q: searchParams.get("q") || defaults.q,
+  });
 }
 
 export function filtersToSearchParams(filters) {
+  const current = normalizeReportFilters(filters);
   const params = new URLSearchParams();
-  if (filters.category && filters.category !== "all") params.set("category", filters.category);
-  if (filters.range    && filters.range    !== "All") params.set("range",    filters.range);
-  if (filters.status)                                 params.set("status",   filters.status);
-  if (filters.q)                                      params.set("q",        filters.q);
+  if (current.category && current.category !== "all") params.set("category", current.category);
+  if (current.range && current.range !== "All") params.set("range", current.range);
+  if (current.status) params.set("status", current.status);
+  if (current.county) params.set("county", current.county);
+  if (current.zip) params.set("zip", current.zip);
+  if (current.q) params.set("q", current.q);
   return params;
 }

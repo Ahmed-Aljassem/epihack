@@ -36,6 +36,22 @@ function centroid(reports) {
   return { latitude: sum.lat / n, longitude: sum.lng / n };
 }
 
+function summarizeZips(reports) {
+  const counts = new Map();
+  reports.forEach((report) => {
+    const zip = report.location?.zip;
+    if (!zip) return;
+    counts.set(zip, (counts.get(zip) || 0) + 1);
+  });
+
+  const ordered = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  return {
+    primaryZip: ordered[0]?.[0] || "—",
+    zipCount: ordered.length,
+    zipSummary: ordered.slice(0, 3).map(([zip]) => zip).join(", ") || "—",
+  };
+}
+
 export function detectClusters(reports, {
   radiusMi = 60,
   windowDays = 7,
@@ -74,6 +90,7 @@ export function detectClusters(reports, {
       }
 
       if (group.length >= minSize) {
+        const zipSummary = summarizeZips(group);
         clusters.push({
           id: `${slug}-${seed.id}`,
           categorySlug: slug,
@@ -83,6 +100,7 @@ export function detectClusters(reports, {
           centroid: centroid(group),
           windowDays,
           radiusMi,
+          ...zipSummary,
         });
       }
     }

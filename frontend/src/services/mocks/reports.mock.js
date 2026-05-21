@@ -2,7 +2,7 @@
 Mock implementation of the reports service.
 
 Mirrors the API contract documented in `frontend/INTEGRATION.md`:
-- list({ category?, status?, q?, range?, ids? }) -> Report[]
+- list({ category?, status?, county?, zip?, q?, range?, ids? }) -> Report[]
 - get(id) -> Report
 - patchStatus(id, status) -> Report
 - addNote(id, body, author) -> Report
@@ -46,37 +46,7 @@ function emit() {
 
 export async function list(params = {}) {
   await wait();
-  let data = snapshot();
-  const { category, status, q, range, ids } = params;
-
-  if (ids) {
-    const set = new Set(ids);
-    data = data.filter((r) => set.has(r.id));
-  }
-
-  if (category && category !== "all") {
-    data = data.filter((r) => r.categorySlug === category);
-  }
-
-  if (status) {
-    const label = STATUS_FILTER_TO_LABEL[status];
-    if (label) data = data.filter((r) => r.status === label);
-  }
-
-  if (range && RANGE_HOURS[range] !== Infinity) {
-    const cutoff = Date.now() - RANGE_HOURS[range] * 60 * 60 * 1000;
-    data = data.filter((r) => new Date(r.submittedAt).getTime() >= cutoff);
-  }
-
-  if (q) {
-    const term = q.trim().toLowerCase();
-    data = data.filter((r) => {
-      const hay = `${r.id} ${r.category} ${r.summary} ${r.location?.coords || ""}`.toLowerCase();
-      return hay.includes(term);
-    });
-  }
-
-  return data;
+  return snapshot().filter((report) => matchesReportFilters(report, params));
 }
 
 export async function get(id) {
@@ -130,25 +100,7 @@ const STATUS_FILTER_TO_LABEL = {
 };
 
 export function filterClient(reports, filters = {}) {
-  const { category, status, q, range, ids } = filters;
-  const cutoff = range && RANGE_HOURS[range] !== Infinity
-    ? Date.now() - RANGE_HOURS[range] * 60 * 60 * 1000
-    : -Infinity;
-  const term = (q || "").trim().toLowerCase();
-  const idSet = ids ? new Set(ids) : null;
-  const wantStatus = status && STATUS_FILTER_TO_LABEL[status];
-
-  return reports.filter((r) => {
-    if (idSet && !idSet.has(r.id)) return false;
-    if (category && category !== "all" && r.categorySlug !== category) return false;
-    if (wantStatus && r.status !== wantStatus) return false;
-    if (range && new Date(r.submittedAt).getTime() < cutoff) return false;
-    if (term) {
-      const hay = `${r.id} ${r.category} ${r.summary} ${r.location?.coords || ""}`.toLowerCase();
-      if (!hay.includes(term)) return false;
-    }
-    return true;
-  });
+  return reports.filter((report) => matchesReportFilters(report, filters));
 }
 
 export function countByStatus(reports) {
@@ -160,4 +112,39 @@ export function countByStatus(reports) {
     else if (r.status === "Resolved")  acc.resolved += 1;
   });
   return acc;
+}
+
+function matchesReportFilters(report, filters = {}) {
+  const { category, status, county, zip, q, range, ids } = filters;
+  const cutoff = range && RANGE_HOURS[range] !== Infinity
+    ? Date.now() - RANGE_HOURS[range] * 60 * 60 * 1000
+    : -Infinity;
+  const term = (q || "").trim().toLowerCase();
+  const idSet = ids ? new Set(ids) : null;
+  const wantStatus = status && STATUS_FILTER_TO_LABEL[status];
+  const reportCounty = report.location?.county || report.county || "";
+  const reportZip = report.location?.zip || report.zip || "";
+
+  if (idSet && !idSet.has(report.id)) return false;
+  if (category && category !== "all" && report.categorySlug !== category) return false;
+  if (wantStatus && report.status !== wantStatus) return false;
+  if (county && reportCounty.toLowerCase() !== county.toLowerCase()) return false;
+  if (zip && reportZip !== zip) return false;
+  if (range && new Date(report.submittedAt).getTime() < cutoff) return false;
+  if (term && !buildReportSearchHaystack(report).includes(term)) return false;
+  return true;
+}
+
+function buildReportSearchHaystack(report) {
+  return [
+    report.id,
+    report.category,
+    report.summary,
+    report.location?.city || report.city || "",
+    report.location?.zip || report.zip || "",
+    report.location?.county || report.county || "",
+    report.location?.coords || "",
+  ]
+    .join(" ")
+    .toLowerCase();
 }

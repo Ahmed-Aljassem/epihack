@@ -39,6 +39,8 @@ export function exportReportsCSV(reports, filenamePrefix = "reports") {
     { key: "category",   label: "Category" },
     { key: "status",     label: "Status" },
     { key: "summary",    label: "Summary" },
+    { key: "zip",        label: "ZIP" },
+    { key: "county",     label: "County" },
     { key: "latitude",   label: "Latitude" },
     { key: "longitude",  label: "Longitude" },
     { key: "submittedAt", label: "Submitted" },

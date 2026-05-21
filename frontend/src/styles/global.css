@@ -849,6 +849,11 @@ a {
   color: var(--muted-2);
 }
 
+.search-input:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
 .stat-row {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -904,12 +909,28 @@ a {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
   margin-bottom: 14px;
 }
 
 .map-card-title {
   font-size: 15px;
   font-weight: 600;
+}
+
+.map-card-subtitle {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.map-card-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .range-tabs {
@@ -953,6 +974,12 @@ a {
   display: flex;
   flex-wrap: wrap;
   gap: 14px;
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.map-mode-note {
   margin-top: 12px;
   font-size: 12px;
   color: var(--muted);
@@ -1760,6 +1787,37 @@ a {
   color: var(--accent);
 }
 
+.report-filters {
+  margin-bottom: 18px;
+}
+
+.report-filters-row {
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.report-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.report-filter-field {
+  min-width: 0;
+}
+
+.report-filter-summary {
+  align-self: center;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.report-filters-clear {
+  align-self: end;
+  justify-self: end;
+}
+
 /* --- List cards (Rules, Team, Resources) ----------------------------- */
 
 .list-card {
@@ -2555,6 +2613,14 @@ a {
 
   .filter-bar .filter-chip {
     flex-shrink: 0;
+  }
+
+  .report-filter-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .report-filters-clear {
+    justify-self: stretch;
   }
 }
 
