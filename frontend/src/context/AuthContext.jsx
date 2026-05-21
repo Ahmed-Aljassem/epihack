@@ -1,5 +1,11 @@
-import { createContext, useContext, useState, useEffect, useCallback } from "react";
-import { authAPI } from "../services/api";
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+} from "react";
+import authService from "../services/authService";
 
 const AuthContext = createContext(null);
 
@@ -9,30 +15,30 @@ export function AuthProvider({ children }) {
 
   // Restore session on mount
   useEffect(() => {
-    const token = localStorage.getItem("access_token");
-    if (!token) { setLoading(false); return; }
-    authAPI.me()
-      .then((res) => setUser(res.data))
-      .catch(() => localStorage.removeItem("access_token"))
+    authService
+      .getSession()
+      .then((user) => {
+        if (user) {
+          setUser(user);
+        }
+      })
       .finally(() => setLoading(false));
   }, []);
 
   const login = useCallback(async (email, password) => {
-    const res = await authAPI.login(email, password);
-    localStorage.setItem("access_token", res.data.access_token);
-    setUser(res.data.user);
-    return res.data.user;
+    const res = await authService.login(email, password);
+    setUser(res.user);
+    return res.user;
   }, []);
 
   const register = useCallback(async (data) => {
-    const res = await authAPI.register(data);
-    localStorage.setItem("access_token", res.data.access_token);
-    setUser(res.data.user);
-    return res.data.user;
+    const res = await authService.register(data);
+    setUser(res.user);
+    return res.user;
   }, []);
 
   const logout = useCallback(() => {
-    localStorage.removeItem("access_token");
+    authService.logout();
     setUser(null);
   }, []);
 
@@ -40,7 +46,9 @@ export function AuthProvider({ children }) {
   const isAnalyst = ["admin", "epidemiologist"].includes(user?.role);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, isAdmin, isAnalyst }}>
+    <AuthContext.Provider
+      value={{ user, loading, login, register, logout, isAdmin, isAnalyst }}
+    >
       {children}
     </AuthContext.Provider>
   );
