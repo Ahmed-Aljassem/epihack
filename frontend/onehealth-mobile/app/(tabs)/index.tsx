@@ -9,6 +9,7 @@ import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { getReportStats, getUserZip, setFirstReportComplete, incrementReportCount } from '@/utils/storage';
+import { useLang } from '@/utils/i18n';
 import ReportFlow from '@/components/flows/ReportFlow';
 
 // ─── Exact same palette from ReportFlow ──────────────────────
@@ -26,13 +27,6 @@ const DISEASES = [
   { name: 'West Nile', status: 'No signals', icon: 'bug-outline' as const },
 ];
 
-const VITALS = [
-  { icon: 'thermometer-outline' as const, label: 'Temperature', value: '95°F' },
-  { icon: 'cloud-outline' as const, label: 'Air Quality', value: 'Good (42)' },
-  { icon: 'flower-outline' as const, label: 'Pollen', value: '6.2 mod' },
-  { icon: 'sunny-outline' as const, label: 'UV Index', value: '8 high' },
-  { icon: 'water-outline' as const, label: 'Humidity', value: '18%' },
-];
 
 const RECENT = [
   { icon: 'person-outline' as const, title: 'Cough, Fever', sub: 'Moderate · 85719', time: '2h ago' },
@@ -41,6 +35,16 @@ const RECENT = [
 ];
 
 export default function HomeScreen() {
+  const { loc } = useLang();
+  
+  const VITALS = [
+    { icon: 'thermometer-outline' as const, label: loc.v_temp || 'Temperature', value: '95°F' },
+    { icon: 'cloud-outline' as const, label: loc.v_air || 'Air Quality', value: 'Good (42)' },
+    { icon: 'flower-outline' as const, label: loc.v_pol || 'Pollen', value: '6.2 mod' },
+    { icon: 'sunny-outline' as const, label: loc.v_uv || 'UV Index', value: '8 high' },
+    { icon: 'water-outline' as const, label: loc.v_hum || 'Humidity', value: '18%' },
+  ];
+
   const [showSuccess, setShowSuccess] = useState(false);
   const successAnim = useRef(new Animated.Value(0)).current;
   const [refreshing, setRefreshing] = useState(false);
@@ -178,7 +182,7 @@ export default function HomeScreen() {
             </View>
             <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FFF3E0', paddingHorizontal: 10, height: 38, borderRadius: 11, borderWidth: 1.5, borderColor: '#FFE0B2' }}>
-                <Ionicons name="flame" size={16} color="#F57C00" />
+                <Ionicons name="flame" size={20} color="#F57C00" />
                 <Text style={{ fontSize: 14, fontFamily: 'Manrope_800ExtraBold', color: '#F57C00' }}>3</Text>
               </View>
 
@@ -192,7 +196,7 @@ export default function HomeScreen() {
 
           {/* ─── Environment Vitals ──────────────────────────── */}
           <View style={{ paddingHorizontal: 24 }}>
-            <SLabel icon="leaf-outline">Environment</SLabel>
+            <SLabel icon="leaf-outline">{loc.dash_env || 'Environment'}</SLabel>
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}
             contentContainerStyle={{ paddingHorizontal: 24, gap: 8 }}>
@@ -213,8 +217,8 @@ export default function HomeScreen() {
           </ScrollView>
 
           {/* ─── Health Status ────────────────────────────────── */}
-          <View style={{ paddingHorizontal: 24 }}>
-            <SLabel icon="pulse-outline">Health near you</SLabel>
+          <View style={{ paddingHorizontal: 24, marginTop: 12 }}>
+            <SLabel icon="pulse-outline">{loc.dash_health || 'Health near you'}</SLabel>
             {DISEASES.map((d, i) => {
               const on = d.alert;
               return (
@@ -242,8 +246,8 @@ export default function HomeScreen() {
           </View>
 
           {/* ─── Alert ────────────────────────────────────────── */}
-          <View style={{ paddingHorizontal: 24 }}>
-            <SLabel icon="warning-outline">Alert</SLabel>
+          <View style={{ paddingHorizontal: 24, marginTop: 12 }}>
+            <SLabel icon="warning-outline">{loc.dash_alert || 'Alert'}</SLabel>
             <TouchableOpacity activeOpacity={0.7}
               onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/alert-detail'); }}
               style={{
@@ -263,8 +267,8 @@ export default function HomeScreen() {
           </View>
 
           {/* ─── Forecast ────────────────────────────────────── */}
-          <View style={{ paddingHorizontal: 24 }}>
-            <SLabel icon="analytics-outline">Forecast</SLabel>
+          <View style={{ paddingHorizontal: 24, marginTop: 12 }}>
+            <SLabel icon="analytics-outline">{loc.dash_forecast || 'Forecast'}</SLabel>
             <View style={{ backgroundColor: t.card, borderRadius: 14, padding: 16 }}>
               <Text style={{ color: t.sub, fontSize: 15, lineHeight: 22, fontFamily: 'Manrope_400Regular', letterSpacing: -0.2 }}>
                 Stomach illness historically rises during finals week. Last year saw a 180% increase.
@@ -274,8 +278,8 @@ export default function HomeScreen() {
           </View>
 
           {/* ─── Quick Report ────────────────────────────────── */}
-          <View style={{ paddingHorizontal: 24 }}>
-            <SLabel icon="create-outline">Quick report</SLabel>
+          <View style={{ paddingHorizontal: 24, marginTop: 12 }}>
+            <SLabel icon="create-outline">{loc.dash_quick || 'Quick report'}</SLabel>
             <View style={{ flexDirection: 'row', gap: 10 }}>
               {[
                 { icon: 'camera-outline' as const, label: 'Photo', onPress: async () => {
@@ -301,10 +305,10 @@ export default function HomeScreen() {
           </View>
 
           {/* ─── Your Impact ─────────────────────────────────── */}
-          <View style={{ paddingHorizontal: 24 }}>
-            <SLabel icon="trophy-outline">Your impact</SLabel>
-            <View style={{ backgroundColor: t.card, borderRadius: 14, paddingVertical: 18, alignItems: 'center' }}>
-              <Text style={{ color: t.hint, fontSize: 11, fontFamily: 'Manrope_700Bold', letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 4 }}>Reports submitted</Text>
+          <View style={{ paddingHorizontal: 24, marginTop: 12 }}>
+            <SLabel icon="trophy-outline">{loc.dash_impact || 'Your impact'}</SLabel>
+            <View style={{ backgroundColor: t.card, borderRadius: 18, paddingVertical: 20, alignItems: 'center' }}>
+              <Text style={{ color: t.hint, fontSize: 11, fontFamily: 'Manrope_700Bold', letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 4 }}>{loc.rep_sub || 'Reports submitted'}</Text>
               <Text style={{ color: t.text, fontSize: 40, fontFamily: 'Manrope_800ExtraBold', letterSpacing: -1.5 }}>{stats.count || 0}</Text>
               <Text style={{ color: t.sub, fontSize: 13, fontFamily: 'Manrope_500Medium', marginTop: 4 }}>
                 {stats.streak > 0 ? `${stats.streak} week streak` : 'Start reporting weekly'}
@@ -313,8 +317,8 @@ export default function HomeScreen() {
           </View>
 
           {/* ─── Recent ──────────────────────────────────────── */}
-          <View style={{ paddingHorizontal: 24 }}>
-            <SLabel icon="time-outline">Recent near you</SLabel>
+          <View style={{ paddingHorizontal: 24, marginTop: 12 }}>
+            <SLabel icon="time-outline">{loc.dash_recent || 'Recent near you'}</SLabel>
             {RECENT.map((r, i) => (
               <View key={i} style={{
                 flexDirection: 'row', alignItems: 'center', gap: 14,
@@ -331,9 +335,9 @@ export default function HomeScreen() {
                 <Text style={{ fontFamily: 'Manrope_400Regular',  fontSize: 11, color: t.hint }}>{r.time}</Text>
               </View>
             ))}
-            <TouchableOpacity style={{ paddingHorizontal: 4, marginTop: 4 }}
-              onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}>
-              <Text style={{ color: t.accent, fontSize: 13, fontFamily: 'Manrope_500Medium' }}>See all reports</Text>
+            <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/map'); }}
+              style={{ backgroundColor: t.accentSoft, borderRadius: 14, paddingVertical: 14, alignItems: 'center', marginTop: 12 }}>
+              <Text style={{ color: t.accent, fontSize: 13, fontFamily: 'Manrope_500Medium' }}>{loc.see_all || 'See all reports'}</Text>
             </TouchableOpacity>
           </View>
 
