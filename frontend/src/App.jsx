@@ -25,6 +25,8 @@ const TeamPage = lazy(() => import("./pages/TeamPage"));
 const SurveysPage = lazy(() => import("./pages/SurveysPage"));
 const SurveyDetailPage = lazy(() => import("./pages/SurveyDetailPage"));
 const MyResponsesPage = lazy(() => import("./pages/MyResponsesPage"));
+const FillReportPage = lazy(() => import("./pages/FillReportPage"));
+const ReportSentPage = lazy(() => import("./pages/ReportSentPage"));
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -76,9 +78,9 @@ export default function App() {
             {/* Public marketing landing */}
             <Route path="/" element={<PublicHomePage />} />
 
-            {/* Legacy mobile-routed paths land back on the public site */}
-            <Route path="/report" element={<Navigate to="/" replace />} />
-            <Route path="/report/sent" element={<Navigate to="/" replace />} />
+            {/* Public report submission */}
+            <Route path="/report" element={<FillReportPage />} />
+            <Route path="/report/sent" element={<ReportSentPage />} />
 
             {/* Guest-only */}
             <Route

@@ -5,11 +5,12 @@ is an expert console; community reporting happens in the mobile app.
 
 export const LANDING_HERO = {
   eyebrow: "One Health · Arizona",
-  title: "Spot health risks earlier, across people, animals, and the environment.",
-  copy:
-    "Community members report what they're seeing through the mobile app. Public-health partners triage, route, and respond from this console.",
+  title:
+    "Spot health risks earlier, across people, animals, and the environment.",
+  copy: "Community members report what they're seeing through the mobile app. Public-health partners triage, route, and respond from this console.",
   primaryCTA: { label: "Sign in to console", to: "/login" },
   secondaryCTA: { label: "About the project", to: "#about" },
+  tertiaryCTA: { label: "How are you feeling?", to: "/report" },
 };
 
 export const LANDING_PILLARS = [
@@ -49,30 +50,30 @@ export const LANDING_STEPS = [
 ];
 
 export const LANDING_PARTNERS = [
-  { id: "azdhs",   label: "AZ Dept. of Health Services" },
-  { id: "pima",    label: "Pima County Health" },
-  { id: "azgf",    label: "AZ Game & Fish" },
-  { id: "azda",    label: "AZ Dept. of Agriculture" },
-  { id: "adeq",    label: "AZ Dept. of Environmental Quality" },
-  { id: "uoa",     label: "University of Arizona" },
+  { id: "azdhs", label: "AZ Dept. of Health Services" },
+  { id: "pima", label: "Pima County Health" },
+  { id: "azgf", label: "AZ Game & Fish" },
+  { id: "azda", label: "AZ Dept. of Agriculture" },
+  { id: "adeq", label: "AZ Dept. of Environmental Quality" },
+  { id: "uoa", label: "University of Arizona" },
 ];
 
 export const FOOTER_LINKS = {
   product: [
     { label: "Sign in to console", to: "/login" },
-    { label: "Register",           to: "/register" },
-    { label: "Mobile app (iOS)",   to: "#mobile" },
+    { label: "Register", to: "/register" },
+    { label: "Mobile app (iOS)", to: "#mobile" },
     { label: "Mobile app (Android)", to: "#mobile" },
   ],
   resources: [
-    { label: "About",      to: "#about" },
+    { label: "About", to: "#about" },
     { label: "How it works", to: "#how" },
-    { label: "Partners",   to: "#partners" },
-    { label: "Privacy",    to: "#privacy" },
+    { label: "Partners", to: "#partners" },
+    { label: "Privacy", to: "#privacy" },
   ],
   contact: [
-    { label: "Press inquiries",  to: "mailto:press@onehealth.az.gov" },
-    { label: "Partner support",  to: "mailto:partners@onehealth.az.gov" },
+    { label: "Press inquiries", to: "mailto:press@onehealth.az.gov" },
+    { label: "Partner support", to: "mailto:partners@onehealth.az.gov" },
     { label: "Security disclosure", to: "mailto:security@onehealth.az.gov" },
   ],
 };
