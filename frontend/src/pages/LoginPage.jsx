@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import {
-  Shield, ArrowRight, ShieldCheck, Activity, Users,
+  ArrowRight, ShieldCheck, Activity, Users,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { BRAND, BRAND_LOGO_SRC } from "../config/brand";
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -32,9 +33,16 @@ export default function LoginPage() {
       <aside className="auth-pane">
         <Link to="/" className="auth-pane-brand">
           <span className="auth-pane-brand-mark">
-            <Shield size={16} strokeWidth={2.2} />
+            <img
+              src={BRAND_LOGO_SRC}
+              alt={BRAND.logoAlt}
+              className="auth-brand-logo"
+            />
           </span>
-          One Health · Arizona
+          <span className="auth-brand-text">
+            <strong>{BRAND.appNameWithRegion}</strong>
+            <span>{BRAND.lockup}</span>
+          </span>
         </Link>
 
         <div>
@@ -70,7 +78,7 @@ export default function LoginPage() {
         </div>
 
         <div className="auth-pane-footer">
-          © 2026 One Health Arizona · A University of Arizona project
+          © 2026 {BRAND.lockup} / A University of Arizona project
         </div>
       </aside>
 
@@ -131,7 +139,7 @@ export default function LoginPage() {
           </form>
 
           <div className="auth-footer">
-            New to One Health AZ?{" "}
+            New to {BRAND.lockupShort}?{" "}
             <Link to="/register" className="auth-link">Request access</Link>
           </div>
         </div>

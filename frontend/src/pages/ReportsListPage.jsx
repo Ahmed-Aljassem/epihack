@@ -88,7 +88,7 @@ export default function ReportsListPage() {
             />
           </div>
           <button
-            className="btn btn-ghost"
+            className="btn btn-ghost is-live"
             onClick={refresh}
             title="Refresh"
             disabled={loading}

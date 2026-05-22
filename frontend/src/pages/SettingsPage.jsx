@@ -30,7 +30,7 @@ export default function SettingsPage() {
         <div>
           <h1 className="console-title">Settings</h1>
           <p className="console-subtitle">
-            Configure how the One Health · AZ console behaves for you and your team.
+            Configure how the One Health AZ console behaves for you and your team.
           </p>
         </div>
       </div>

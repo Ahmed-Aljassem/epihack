@@ -57,9 +57,9 @@ const CLUSTER_LAYER_STYLE = {
     "circle-color": [
       "step",
       ["get", "point_count"],
-      "#2f6f5a", // 1-9
-      10, "#245544", // 10-24
-      25, "#1e4f60", // 25+
+      "#0f766e", // 1-9 — teal-700
+      10, "#0e7490", // 10-24 — cyan-700
+      25, "#1e3a8a", // 25+ — indigo-900
     ],
     "circle-radius": [
       "step",
@@ -68,9 +68,9 @@ const CLUSTER_LAYER_STYLE = {
       10, 22,
       25, 28,
     ],
-    "circle-stroke-width": 3,
-    "circle-stroke-color": "rgba(255, 255, 255, 0.9)",
-    "circle-opacity": 0.92,
+    "circle-stroke-width": 4,
+    "circle-stroke-color": "#ffffff",
+    "circle-opacity": 1,
   },
 };
 
@@ -104,9 +104,9 @@ const POINT_LAYER_STYLE = {
       "#cbd5e1",
     ],
     "circle-radius": 8,
-    "circle-stroke-width": 2,
-    "circle-stroke-color": "rgba(255, 255, 255, 0.95)",
-    "circle-opacity": 0.95,
+    "circle-stroke-width": 2.5,
+    "circle-stroke-color": "#ffffff",
+    "circle-opacity": 1,
   },
 };
 
@@ -172,9 +172,9 @@ const RESOURCE_POINT_LAYER_STYLE = {
       9, 8,
       12, 10,
     ],
-    "circle-stroke-width": 2,
-    "circle-stroke-color": "rgba(255, 255, 255, 0.96)",
-    "circle-opacity": 0.92,
+    "circle-stroke-width": 2.5,
+    "circle-stroke-color": "#ffffff",
+    "circle-opacity": 1,
   },
 };
 
@@ -256,30 +256,30 @@ function buildHeatmapLayerStyle(showPointLayers) {
         "interpolate",
         ["linear"],
         ["heatmap-density"],
-        0, "rgba(255, 237, 160, 0)",
-        0.12, "rgba(254, 217, 118, 0.18)",
-        0.28, "rgba(253, 174, 97, 0.42)",
-        0.48, "rgba(244, 109, 67, 0.62)",
-        0.68, "rgba(215, 48, 39, 0.78)",
-        0.85, "rgba(165, 15, 21, 0.9)",
-        1, "rgba(103, 0, 13, 0.96)",
+        0,    "rgba(33, 102, 172, 0)",
+        0.15, "rgba(103, 169, 207, 0.55)",
+        0.32, "rgba(253, 219, 199, 0.7)",
+        0.5,  "rgba(244, 109, 67, 0.85)",
+        0.7,  "rgba(215, 25, 28, 0.92)",
+        0.85, "rgba(165, 0, 38, 0.96)",
+        1,    "rgba(103, 0, 13, 1)",
       ],
       "heatmap-radius": [
         "interpolate",
         ["linear"],
         ["zoom"],
-        4, 20,
-        7, 30,
-        10, 42,
-        12, 54,
+        4, 22,
+        7, 34,
+        10, 46,
+        12, 58,
       ],
       "heatmap-opacity": [
         "interpolate",
         ["linear"],
         ["zoom"],
-        4, showPointLayers ? 0.42 : 0.68,
-        8, showPointLayers ? 0.5 : 0.78,
-        12, showPointLayers ? 0.34 : 0.55,
+        4, showPointLayers ? 0.62 : 0.82,
+        8, showPointLayers ? 0.72 : 0.9,
+        12, showPointLayers ? 0.56 : 0.72,
       ],
     },
   };
@@ -337,7 +337,7 @@ export default function ReportsMap({
   height = 420,
   initialView = DEFAULT_VIEW,
   onSelectReport,
-  mapStyle = "mapbox://styles/mapbox/light-v11",
+  mapStyle = "mapbox://styles/mapbox/streets-v12",
   viewMode = "points",
   showReportLink = true,
 }) {

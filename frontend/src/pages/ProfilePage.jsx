@@ -28,7 +28,7 @@ export default function ProfilePage() {
         <div>
           <h1 className="console-title">Profile</h1>
           <p className="console-subtitle">
-            Your account details as recorded in the One Health · AZ console.
+            Your account details as recorded in the One Health AZ console.
           </p>
         </div>
       </div>

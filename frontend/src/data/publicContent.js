@@ -4,7 +4,7 @@ is an expert console; community reporting happens in the mobile app.
 */
 
 export const LANDING_HERO = {
-  eyebrow: "One Health · Arizona",
+  eyebrow: "One Health Arizona",
   title:
     "Spot health risks earlier, across people, animals, and the environment.",
   copy: "Community members report what they're seeing through the mobile app. Public-health partners triage, route, and respond from this console.",
@@ -57,6 +57,12 @@ export const LANDING_PARTNERS = [
   { id: "adeq", label: "AZ Dept. of Environmental Quality" },
   { id: "uoa", label: "University of Arizona" },
 ];
+
+export const LANDING_COLLABORATION = {
+  eyebrow: "Who's Behind This",
+  title: "Built Through Collaboration",
+  copy: "This project was shaped by a diverse group of people working together during EpiHack Arizona. It brings together technologists, public health professionals, tribal and community experts, local government partners, university collaborators, and students from the University of Arizona. Each group contributed something essential: lived experience, field knowledge, technical expertise, public health insight, and practical ideas for how a reporting system should work in real communities.",
+};
 
 export const FOOTER_LINKS = {
   product: [

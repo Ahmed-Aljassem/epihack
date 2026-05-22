@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Search, Plus, ChevronRight, RefreshCw } from "lucide-react";
 import DashboardCategoryChart from "../components/console/DashboardCategoryChart";
 import DashboardSignalsChart from "../components/console/DashboardSignalsChart";
+import DashboardTrafficChart from "../components/console/DashboardTrafficChart";
 import DashboardTrendChart from "../components/console/DashboardTrendChart";
 import ReportFilters from "../components/console/ReportFilters";
 import ResourceGroupToggles from "../components/console/ResourceGroupToggles";
@@ -149,7 +150,7 @@ export default function DashboardPage() {
             />
           </div>
           <button
-            className="btn btn-ghost"
+            className="btn btn-ghost is-live"
             onClick={refresh}
             title="Refresh"
             disabled={loading}
@@ -184,7 +185,10 @@ export default function DashboardPage() {
 
       <div className="stat-row">
         {stats.map((s) => (
-          <div key={s.label} className="stat-card">
+          <div
+            key={s.label}
+            className={`stat-card ${s.cardTone ? `stat-card--${s.cardTone}` : ""}`}
+          >
             <div className="stat-label">{s.label}</div>
             <div className="stat-value">{s.value}</div>
             <div className={`stat-delta ${s.tone === "up" ? "stat-delta--up" : ""}`}>
@@ -347,7 +351,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="console-grid-2 analytics-grid">
+      <div className="console-grid-2 is-even analytics-grid">
         <DashboardTrendChart
           reports={reports}
           range={filters.range}
@@ -357,6 +361,10 @@ export default function DashboardPage() {
 
       <div className="analytics-grid">
         <DashboardSignalsChart reports={reports} />
+      </div>
+
+      <div className="analytics-grid">
+        <DashboardTrafficChart />
       </div>
 
       <div className="card queue-card">
@@ -445,27 +453,32 @@ function buildStats(allReports, counts) {
       value: newToday,
       delta: delta > 0 ? `+${delta} vs yesterday` : delta < 0 ? `${delta} vs yesterday` : "Same as yesterday",
       tone: delta > 0 ? "up" : undefined,
+      cardTone: "new",
     },
     {
       label: "Open · in review",
       value: counts.review,
       delta: `${counts.review} active`,
+      cardTone: "open",
     },
     {
       label: "Awaiting routing",
       value: counts.new,
       delta: counts.new > 0 ? "Needs triage" : "Caught up",
+      cardTone: "awaiting",
     },
     {
       label: "Routed · 7d",
       value: routedThisWeek,
       delta: routedThisWeek > 0 ? `+${routedThisWeek} this week` : "—",
       tone: routedThisWeek > 0 ? "up" : undefined,
+      cardTone: "routed",
     },
     {
       label: "Resolved",
       value: counts.resolved,
       delta: `${Math.round((counts.resolved / Math.max(counts.total, 1)) * 100)}% of total`,
+      cardTone: "resolved",
     },
   ];
 }

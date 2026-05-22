@@ -9,6 +9,7 @@ import {
   CloudSun,
   Droplets,
   Flame,
+  Sun,
   ThermometerSun,
   Wind,
 } from "lucide-react";
@@ -66,7 +67,8 @@ export default function PublicSituationSection() {
       <div className="landing-situation-head">
         <div>
           <h2 className="landing-section-title landing-situation-title">
-            Public signals and response resources across Arizona.
+            Public signals and response resources across{" "}
+            <span className="state-arizona-word">Arizona</span>.
           </h2>
           <p className="landing-situation-copy">
             Explore recent report patterns with optional heat-relief resources,
@@ -129,7 +131,7 @@ export default function PublicSituationSection() {
           viewMode={viewMode}
           height={440}
           showReportLink={false}
-          mapStyle="mapbox://styles/mapbox/light-v11"
+          mapStyle="mapbox://styles/mapbox/streets-v12"
         />
 
         <div className="landing-situation-note">
@@ -174,93 +176,76 @@ export default function PublicSituationSection() {
         </div>
       </div>
 
-      <div className="landing-weather-card">
-        <div className="landing-weather-header">
-          <div className="landing-weather-title">
-            <CloudSun size={16} strokeWidth={2.2} />
-            Arizona weather watch
-          </div>
-          <span
-            className={`landing-weather-risk landing-weather-risk--${weather.summary.heatRisk.toLowerCase()}`}
-          >
-            <Flame size={12} strokeWidth={2.2} />
-            {weather.summary.heatRisk} heat risk
+      <div className="landing-weather-strip">
+        <span
+          className={`landing-weather-risk landing-weather-risk--${weather.summary.heatRisk.toLowerCase()}`}
+        >
+          <Flame size={12} strokeWidth={2.2} />
+          {weather.summary.heatRisk} heat risk
+        </span>
+        <span className="landing-weather-strip-item">
+          <ThermometerSun size={13} strokeWidth={2} />
+          Statewide{" "}
+          <strong>
+            {weather.loading || weather.summary.statewideAvgF == null
+              ? "—"
+              : `${weather.summary.statewideAvgF}°F`}
+          </strong>
+        </span>
+        {weather.summary.hottest && (
+          <span className="landing-weather-strip-item">
+            <CloudSun size={13} strokeWidth={2} />
+            Hotspot {weather.summary.hottest.label}{" "}
+            <strong>{weather.summary.hottest.temperatureF}°F</strong>
           </span>
-        </div>
-        <p className="landing-weather-copy">{weather.summary.guidance}</p>
-
-        <div className="landing-weather-kpis">
-          <div className="landing-weather-kpi">
-            <ThermometerSun size={14} strokeWidth={2} />
-            <span>Statewide avg</span>
-            <strong>
-              {weather.loading || weather.summary.statewideAvgF == null
-                ? "..."
-                : `${weather.summary.statewideAvgF}°F`}
-            </strong>
-          </div>
-          <div className="landing-weather-kpi">
-            <Flame size={14} strokeWidth={2} />
-            <span>Warmest city</span>
-            <strong>
-              {weather.summary.hottest
-                ? `${weather.summary.hottest.label} ${weather.summary.hottest.temperatureF}°F`
-                : "—"}
-            </strong>
-          </div>
-          <div className="landing-weather-kpi">
-            <Droplets size={14} strokeWidth={2} />
-            <span>Peak UV</span>
-            <strong>
-              {weather.loading || weather.summary.maxUv == null
-                ? "..."
-                : weather.summary.maxUv}
-            </strong>
-          </div>
-        </div>
-
-        <div className="landing-weather-grid">
-          {weather.observations.map((station) => (
-            <article key={station.id} className="landing-weather-station">
-              <div className="landing-weather-station-head">
-                <div className="landing-weather-city">{station.label}</div>
-                <div className="landing-weather-county">{station.county} Co.</div>
-              </div>
-              <div className="landing-weather-main">
-                <strong>{station.temperatureF}°F</strong>
-                <span>{station.condition}</span>
-              </div>
-              <div className="landing-weather-meta">
-                <span>
-                  <ThermometerSun size={12} strokeWidth={2} />
-                  Feels {station.feelsLikeF}°
-                </span>
-                <span>
-                  <Wind size={12} strokeWidth={2} />
-                  {station.windMph} mph
-                </span>
-                <span>
-                  <Droplets size={12} strokeWidth={2} />
-                  {station.humidity}% RH
-                </span>
-              </div>
-              <div className="landing-weather-range">
-                H {station.highF}° · L {station.lowF}°
-              </div>
-            </article>
-          ))}
-        </div>
-
-        <div className="landing-weather-foot">
-          <span>{formatWeatherUpdated(weather.updatedAt)}</span>
-          <span>
-            {weather.error
-              ? "Live weather unavailable · using fallback snapshot"
-              : weather.usingFallback
-                ? "Fallback demo weather snapshot"
-                : "Live weather via Open-Meteo"}
-          </span>
-        </div>
+        )}
+        <span className="landing-weather-strip-item">
+          <ThermometerSun size={13} strokeWidth={2} />
+          Feels like{" "}
+          <strong>
+            {weather.loading || weather.summary.maxFeelsLikeF == null
+              ? "—"
+              : `${weather.summary.maxFeelsLikeF}°F`}
+          </strong>
+        </span>
+        <span className="landing-weather-strip-item">
+          <Sun size={13} strokeWidth={2} />
+          UV{" "}
+          <strong>
+            {weather.loading || weather.summary.maxUv == null
+              ? "—"
+              : weather.summary.maxUv}
+          </strong>
+        </span>
+        <span className="landing-weather-strip-item">
+          <Droplets size={13} strokeWidth={2} />
+          Humidity{" "}
+          <strong>
+            {weather.loading || weather.summary.avgHumidity == null
+              ? "—"
+              : `${weather.summary.avgHumidity}%`}
+          </strong>
+        </span>
+        <span className="landing-weather-strip-item">
+          <Wind size={13} strokeWidth={2} />
+          Wind{" "}
+          <strong>
+            {weather.loading || weather.summary.maxWindMph == null
+              ? "—"
+              : `${weather.summary.maxWindMph} mph`}
+          </strong>
+        </span>
+        <span className="landing-weather-strip-item">
+          <ThermometerSun size={13} strokeWidth={2} />
+          Day range{" "}
+          <strong>
+            {weather.loading ||
+            weather.summary.statewideLowF == null ||
+            weather.summary.statewideHighF == null
+              ? "—"
+              : `${weather.summary.statewideLowF}–${weather.summary.statewideHighF}°F`}
+          </strong>
+        </span>
       </div>
     </section>
   );
@@ -271,13 +256,4 @@ function filterReportsByRange(reports, range) {
   const hours = range === "30d" ? 30 * 24 : 7 * 24;
   const cutoff = Date.now() - hours * 60 * 60 * 1000;
   return reports.filter((report) => new Date(report.submittedAt).getTime() >= cutoff);
-}
-
-function formatWeatherUpdated(updatedAt) {
-  if (!updatedAt) return "Updating weather…";
-  if (typeof updatedAt === "string") return updatedAt;
-  return `Updated ${updatedAt.toLocaleTimeString([], {
-    hour: "numeric",
-    minute: "2-digit",
-  })}`;
 }

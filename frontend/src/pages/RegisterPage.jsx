@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import {
-  Shield, ArrowRight, Stethoscope, PawPrint, BarChart3, BookOpenCheck,
+  ArrowRight, Stethoscope, PawPrint, BarChart3, BookOpenCheck,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { BRAND, BRAND_LOGO_SRC } from "../config/brand";
 
 const ROLES = [
   { value: "health_worker",  label: "Health worker",       desc: "Clinic / hospital staff",          icon: Stethoscope },
@@ -53,9 +54,16 @@ export default function RegisterPage() {
       <aside className="auth-pane">
         <Link to="/" className="auth-pane-brand">
           <span className="auth-pane-brand-mark">
-            <Shield size={16} strokeWidth={2.2} />
+            <img
+              src={BRAND_LOGO_SRC}
+              alt={BRAND.logoAlt}
+              className="auth-brand-logo"
+            />
           </span>
-          One Health · Arizona
+          <span className="auth-brand-text">
+            <strong>{BRAND.appNameWithRegion}</strong>
+            <span>{BRAND.lockup}</span>
+          </span>
         </Link>
 
         <div>

@@ -5,6 +5,7 @@ import {
   User, Settings, LogOut, Menu, X,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
+import { BRAND, BRAND_LOGO_SRC } from "../../config/brand";
 
 const NAV_GROUPS = [
   {
@@ -78,8 +79,17 @@ export default function AppLayout() {
 
       <aside className="sidebar">
         <div className="sidebar-brand">
-          <span className="sidebar-brand-icon">OH</span>
-          <span className="sidebar-brand-title">One Health · AZ</span>
+          <span className="sidebar-brand-icon">
+            <img
+              src={BRAND_LOGO_SRC}
+              alt={BRAND.logoAlt}
+              className="sidebar-brand-logo"
+            />
+          </span>
+          <span className="sidebar-brand-title">
+            <strong>{BRAND.appNameWithRegion}</strong>
+            <small>{BRAND.lockup}</small>
+          </span>
         </div>
 
         {NAV_GROUPS.map((group) => (

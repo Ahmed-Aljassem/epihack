@@ -119,6 +119,11 @@ function buildWeatherSummary(observations) {
       hottest: null,
       statewideAvgF: null,
       maxUv: null,
+      maxFeelsLikeF: null,
+      avgHumidity: null,
+      maxWindMph: null,
+      statewideLowF: null,
+      statewideHighF: null,
       heatRisk: "Moderate",
       guidance: "Weather data is loading.",
     };
@@ -129,13 +134,24 @@ function buildWeatherSummary(observations) {
     observations.reduce((sum, item) => sum + item.temperatureF, 0) / observations.length,
   );
   const maxUv = Math.max(...observations.map((item) => Number(item.uvMax || 0)));
-  const maxFeelsLike = Math.max(...observations.map((item) => Number(item.feelsLikeF || 0)));
-  const heatRisk = classifyHeatRisk(maxFeelsLike, maxUv);
+  const maxFeelsLikeF = Math.max(...observations.map((item) => Number(item.feelsLikeF || 0)));
+  const avgHumidity = safeRound(
+    observations.reduce((sum, item) => sum + Number(item.humidity || 0), 0) / observations.length,
+  );
+  const maxWindMph = Math.max(...observations.map((item) => Number(item.windMph || 0)));
+  const statewideLowF = Math.min(...observations.map((item) => Number(item.lowF || item.temperatureF || 0)));
+  const statewideHighF = Math.max(...observations.map((item) => Number(item.highF || item.temperatureF || 0)));
+  const heatRisk = classifyHeatRisk(maxFeelsLikeF, maxUv);
 
   return {
     hottest,
     statewideAvgF,
     maxUv,
+    maxFeelsLikeF,
+    avgHumidity,
+    maxWindMph,
+    statewideLowF,
+    statewideHighF,
     heatRisk,
     guidance: heatGuidance(heatRisk),
   };

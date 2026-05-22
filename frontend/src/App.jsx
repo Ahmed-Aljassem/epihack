@@ -7,6 +7,7 @@ import { Suspense, lazy } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import AppLoader from "./components/common/AppLoader";
 
 const AppLayout = lazy(() => import("./components/layout/AppLayout"));
 const PublicHomePage = lazy(() => import("./pages/PublicHomePage"));
@@ -40,7 +41,15 @@ function ProtectedRoute({ children }) {
   const previewBypass =
     import.meta.env.DEV &&
     new URLSearchParams(window.location.search).get("preview") === "1";
-  if (loading) return <div className="loading-screen">Loading…</div>;
+  if (loading) {
+    return (
+      <AppLoader
+        compact
+        title="Connecting secure console"
+        subtitle="Validating your session and loading team workspace…"
+      />
+    );
+  }
   if (user || previewBypass) return children;
   return <Navigate to="/login" replace />;
 }
@@ -86,7 +95,7 @@ export default function App() {
             },
           }}
         />
-        <Suspense fallback={<div className="loading-screen">Loading…</div>}>
+        <Suspense fallback={<AppLoader />}>
           <Routes>
             {/* Public marketing landing */}
             <Route path="/" element={<PublicHomePage />} />

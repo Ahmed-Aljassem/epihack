@@ -133,7 +133,7 @@ export default function MapPage() {
         </div>
         <div className="console-actions">
           <div className="search-wrap">
-            <Search size={14} />
+            <Search size={15} strokeWidth={2.2} />
             <input
               type="text"
               className="search-input"
