@@ -140,19 +140,37 @@ export interface SavedReport {
   severity?: string;
   zip: string;
   date: string;
+  submittedAt?: string;
+  reportSubject?: string;
+  otherSymptomText?: string;
+  sickCount?: number;
+  onset?: string;
+  diagnosed?: boolean | null;
+  absentFromWorkSchool?: boolean | null;
+  animalTypes?: string[];
+  animalObservations?: string[];
+  animalIncidentDate?: string;
+  animalSpecies?: string;
+  animalAffectedCount?: number;
+  animalOtherIncidentDetails?: string;
+  animalNotes?: string;
+  environmentObservations?: string[];
+  environmentIncidentDate?: string;
+  environmentVectorDensity?: string;
+  environmentNotes?: string;
 }
 
 export async function saveReport(report: SavedReport): Promise<void> {
   const raw = await AsyncStorage.getItem(KEYS.MY_REPORTS);
-  const list: SavedReport[] = raw ? JSON.parse(raw) : [];
-  list.unshift(report);
+  const list = normalizeSavedReports(raw ? JSON.parse(raw) : []);
+  list.unshift(normalizeSavedReport(report));
   if (list.length > 50) list.length = 50;
   await AsyncStorage.setItem(KEYS.MY_REPORTS, JSON.stringify(list));
 }
 
 export async function getMyReports(): Promise<SavedReport[]> {
   const raw = await AsyncStorage.getItem(KEYS.MY_REPORTS);
-  return raw ? JSON.parse(raw) : [];
+  return normalizeSavedReports(raw ? JSON.parse(raw) : []);
 }
 
 export async function isDisclaimerDismissed(): Promise<boolean> {
@@ -171,3 +189,59 @@ export async function getNotifsOn(): Promise<boolean> {
 export async function setNotifsOn(on: boolean): Promise<void> {
   await AsyncStorage.setItem(KEYS.NOTIFS_ON, String(on));
 }
+
+const toStringArray = (value: unknown): string[] | undefined => {
+  if (!Array.isArray(value)) return undefined;
+  const items = value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+  return items.length > 0 ? items : undefined;
+};
+
+const toOptionalString = (value: unknown): string | undefined => (
+  typeof value === 'string' && value.trim().length > 0 ? value : undefined
+);
+
+const normalizeSavedReport = (value: unknown): SavedReport => {
+  const raw = (value && typeof value === 'object') ? value as Record<string, unknown> : {};
+  const categoryValue = raw.category;
+  const category = Array.isArray(categoryValue)
+    ? categoryValue.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    : typeof categoryValue === 'string' && categoryValue.trim().length > 0
+      ? [categoryValue]
+      : [];
+
+  const date = toOptionalString(raw.date) || toOptionalString(raw.submittedAt) || new Date().toISOString();
+
+  return {
+    id: toOptionalString(raw.id) || `${Date.now()}`,
+    feeling: toOptionalString(raw.feeling) || 'report',
+    category,
+    symptoms: toStringArray(raw.symptoms),
+    observations: toStringArray(raw.observations),
+    severity: toOptionalString(raw.severity),
+    zip: toOptionalString(raw.zip) || '',
+    date,
+    submittedAt: toOptionalString(raw.submittedAt),
+    reportSubject: toOptionalString(raw.reportSubject),
+    otherSymptomText: toOptionalString(raw.otherSymptomText),
+    sickCount: typeof raw.sickCount === 'number' ? raw.sickCount : undefined,
+    onset: toOptionalString(raw.onset),
+    diagnosed: typeof raw.diagnosed === 'boolean' ? raw.diagnosed : null,
+    absentFromWorkSchool: typeof raw.absentFromWorkSchool === 'boolean' ? raw.absentFromWorkSchool : null,
+    animalTypes: toStringArray(raw.animalTypes),
+    animalObservations: toStringArray(raw.animalObservations),
+    animalIncidentDate: toOptionalString(raw.animalIncidentDate),
+    animalSpecies: toOptionalString(raw.animalSpecies),
+    animalAffectedCount: typeof raw.animalAffectedCount === 'number' ? raw.animalAffectedCount : undefined,
+    animalOtherIncidentDetails: toOptionalString(raw.animalOtherIncidentDetails),
+    animalNotes: toOptionalString(raw.animalNotes),
+    environmentObservations: toStringArray(raw.environmentObservations),
+    environmentIncidentDate: toOptionalString(raw.environmentIncidentDate),
+    environmentVectorDensity: toOptionalString(raw.environmentVectorDensity),
+    environmentNotes: toOptionalString(raw.environmentNotes),
+  };
+};
+
+const normalizeSavedReports = (value: unknown): SavedReport[] => {
+  if (!Array.isArray(value)) return [];
+  return value.map(normalizeSavedReport);
+};

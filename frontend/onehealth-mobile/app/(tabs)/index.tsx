@@ -1,16 +1,19 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, RefreshControl, Alert, Animated, Modal,
+  View, Text, ScrollView, TouchableOpacity, RefreshControl, Alert, Animated, Linking, Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
-import { router, useNavigation } from 'expo-router';
-import { getReportStats, getUserZip, hasCompletedFirstReport, setFirstReportComplete, incrementReportCount } from '@/utils/storage';
+import { router, useFocusEffect, useNavigation } from 'expo-router';
+import { getMyReports, getReportStats, getUserZip, hasCompletedFirstReport, incrementReportCount, setFirstReportComplete } from '@/utils/storage';
+import type { SavedReport } from '@/utils/storage';
 import { useLang } from '@/utils/i18n';
 import ReportFlow from '@/components/flows/ReportFlow';
+import { getSymptomResourceRecommendation, isTohonoNationZip } from '@/utils/symptomResources';
+import type { ResourceAction } from '@/utils/symptomResources';
 
 // ─── Exact same palette from ReportFlow ──────────────────────
 const t = {
@@ -77,6 +80,8 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [zip, setZip] = useState('85719');
   const [stats, setStats] = useState({ count: 0, streak: 0 });
+  const [latestReport, setLatestReport] = useState<SavedReport | null>(null);
+  const [showNationResources, setShowNationResources] = useState(false);
   const [customizeStep, setCustomizeStep] = useState<'off' | 'intro' | 'editing'>('off');
   const [showWidgetPicker, setShowWidgetPicker] = useState(false);
   const [homeWidgets, setHomeWidgets] = useState<HomeWidgetId[]>([]);
@@ -96,8 +101,14 @@ export default function HomeScreen() {
   const screenOpacity = useRef(new Animated.Value(1)).current;
 
   const load = useCallback(async () => {
-    setZip(await getUserZip());
-    setStats(await getReportStats());
+    const [storedZip, reportStats, reports] = await Promise.all([
+      getUserZip(),
+      getReportStats(),
+      getMyReports(),
+    ]);
+    setZip(storedZip);
+    setStats(reportStats);
+    setLatestReport(reports[0] || null);
   }, []);
 
   const checkFirstReportPrompt = useCallback(async () => {
@@ -142,7 +153,11 @@ export default function HomeScreen() {
       Animated.delay(2600),
       Animated.timing(screenOpacity, { toValue: 0, duration: 400, useNativeDriver: true }),
     ]).start(() => setShowSplash(false));
-  }, []);
+  }, [checkFirstReportPrompt, load, pulse1, pulse2, screenOpacity, tagOpacity, textOpacity, textSlide]);
+
+  useFocusEffect(useCallback(() => {
+    void load();
+  }, [load]));
 
   useEffect(() => {
     navigation.setOptions({
@@ -156,7 +171,7 @@ export default function HomeScreen() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true); await load(); setRefreshing(false);
-  }, []);
+  }, [load]);
 
   const showSuccessToast = () => {
     setShowSuccess(true);
@@ -188,6 +203,41 @@ export default function HomeScreen() {
     setIsFirstReportPrompt(false);
     setShowForm(true);
   };
+
+  const resourceRecommendation = useMemo(
+    () => getSymptomResourceRecommendation(latestReport),
+    [latestReport],
+  );
+
+  const nationResourceActions = resourceRecommendation?.nationResources || [];
+  const canShowNationButton = !!(
+    latestReport &&
+    nationResourceActions.length > 0 &&
+    isTohonoNationZip(latestReport.zip)
+  );
+
+  useEffect(() => {
+    if (!canShowNationButton) {
+      setShowNationResources(false);
+    }
+  }, [canShowNationButton]);
+
+  const openResourceAction = useCallback(async (action: ResourceAction) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    try {
+      if (action.route) {
+        router.push(action.route as any);
+        return;
+      }
+
+      if (action.href) {
+        await Linking.openURL(action.href);
+      }
+    } catch {
+      Alert.alert('Could not open resource', 'Please try again in a moment.');
+    }
+  }, []);
 
   const renderReportFlow = () => (
     <ReportFlow
@@ -285,6 +335,39 @@ export default function HomeScreen() {
       </View>
     );
   };
+
+  const getResourceActionIcon = (action: ResourceAction): keyof typeof Ionicons.glyphMap => {
+    if (action.href?.startsWith('tel:')) return 'call-outline';
+    if (action.route) return 'map-outline';
+    return 'open-outline';
+  };
+
+  const renderResourceAction = (action: ResourceAction, key: string) => (
+    <TouchableOpacity
+      key={key}
+      activeOpacity={0.82}
+      onPress={() => { void openResourceAction(action); }}
+      style={{
+        backgroundColor: t.accent,
+        borderRadius: 14,
+        paddingVertical: 14,
+        paddingHorizontal: 16,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        marginTop: 10,
+      }}>
+      <View style={{ flex: 1 }}>
+        <Text style={{ color: '#FFFFFF', fontSize: 14, fontFamily: 'Manrope_700Bold' }}>{action.label}</Text>
+        {action.detail && (
+          <Text style={{ color: t.accentMid, fontSize: 12, fontFamily: 'Manrope_500Medium', marginTop: 3 }}>
+            {action.detail}
+          </Text>
+        )}
+      </View>
+      <Ionicons name={getResourceActionIcon(action)} size={18} color="#FFFFFF" />
+    </TouchableOpacity>
+  );
 
   return (
     <View style={{ flex: 1, backgroundColor: t.bg }}>
@@ -538,6 +621,87 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
 
+          <View style={{ paddingHorizontal: 24, marginTop: 12 }}>
+            <SLabel icon="medkit-outline">{loc.dash_resources || 'Resources for you'}</SLabel>
+            {!resourceRecommendation ? (
+              <View style={{ backgroundColor: t.card, borderRadius: 18, padding: 18 }}>
+                <Text style={{ color: t.text, fontSize: 18, fontFamily: 'Manrope_700Bold', letterSpacing: -0.4 }}>
+                  Resources update after each report
+                </Text>
+                <Text style={{ color: t.sub, fontSize: 14, lineHeight: 20, fontFamily: 'Manrope_400Regular', marginTop: 6 }}>
+                  {loc.resource_prompt || 'Submit a report to get matched health resources.'}
+                </Text>
+                <TouchableOpacity
+                  activeOpacity={0.82}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    openManualReport();
+                  }}
+                  style={{
+                    backgroundColor: t.accent,
+                    borderRadius: 14,
+                    paddingVertical: 14,
+                    alignItems: 'center',
+                    marginTop: 16,
+                  }}>
+                  <Text style={{ color: '#FFFFFF', fontSize: 14, fontFamily: 'Manrope_700Bold' }}>
+                    {loc.resource_open_report || 'Start a report'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={{ backgroundColor: t.card, borderRadius: 18, padding: 18 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                  <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: t.accentSoft, alignItems: 'center', justifyContent: 'center' }}>
+                    <Ionicons name="medkit-outline" size={20} color={t.accent} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: t.text, fontSize: 18, fontFamily: 'Manrope_700Bold', letterSpacing: -0.4 }}>
+                      {resourceRecommendation.title}
+                    </Text>
+                    {latestReport?.zip ? (
+                      <Text style={{ color: t.hint, fontSize: 12, fontFamily: 'Manrope_500Medium', marginTop: 2 }}>
+                        Latest report in {latestReport.zip}
+                      </Text>
+                    ) : null}
+                  </View>
+                </View>
+
+                <Text style={{ color: t.sub, fontSize: 14, lineHeight: 20, fontFamily: 'Manrope_400Regular', marginTop: 12 }}>
+                  {resourceRecommendation.summary}
+                </Text>
+
+                {resourceRecommendation.actions.map((action, index) => renderResourceAction(action, `primary-${index}`))}
+
+                {canShowNationButton && (
+                  <TouchableOpacity
+                    activeOpacity={0.82}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setShowNationResources(true);
+                    }}
+                    style={{
+                      backgroundColor: t.accent,
+                      borderRadius: 14,
+                      paddingVertical: 14,
+                      paddingHorizontal: 16,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 12,
+                      marginTop: 10,
+                    }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: '#FFFFFF', fontSize: 14, fontFamily: 'Manrope_700Bold' }}>
+                        {loc.resource_nation_button || "Tohono O'odham Resources"}
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color="#FFFFFF" />
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+          </View>
+
         </ScrollView>
 
 
@@ -649,6 +813,72 @@ export default function HomeScreen() {
                   </TouchableOpacity>
                 );
               })}
+            </View>
+          </View>
+        </Modal>
+
+        <Modal visible={showNationResources} transparent animationType="fade">
+          <View style={{
+            flex: 1,
+            backgroundColor: 'rgba(17,17,17,0.48)',
+            justifyContent: 'center',
+            paddingHorizontal: 24,
+          }}>
+            <TouchableOpacity
+              activeOpacity={1}
+              onPress={() => setShowNationResources(false)}
+              style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+            />
+            <View style={{
+              backgroundColor: t.card,
+              borderRadius: 22,
+              padding: 22,
+              width: '100%',
+              maxWidth: 380,
+              alignSelf: 'center',
+            }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+                <Text style={{ flex: 1, color: t.text, fontSize: 22, fontFamily: 'Manrope_800ExtraBold', letterSpacing: -0.5 }}>
+                  {loc.resource_nation_button || "Tohono O'odham Resources"}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setShowNationResources(false);
+                  }}
+                  style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: t.fill, alignItems: 'center', justifyContent: 'center' }}>
+                  <Ionicons name="close" size={18} color={t.sub} />
+                </TouchableOpacity>
+              </View>
+
+              <Text style={{ color: t.sub, fontSize: 14, lineHeight: 20, fontFamily: 'Manrope_400Regular', marginTop: 10 }}>
+                Relevant contacts are given below.
+              </Text>
+
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                style={{ marginTop: 8, maxHeight: 360 }}
+                contentContainerStyle={{ paddingBottom: 8 }}>
+                {nationResourceActions.map((action, index) => renderResourceAction(action, `nation-${index}`))}
+              </ScrollView>
+
+              <TouchableOpacity
+                activeOpacity={0.82}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setShowNationResources(false);
+                }}
+                style={{
+                  backgroundColor: t.fill,
+                  borderRadius: 14,
+                  paddingVertical: 14,
+                  alignItems: 'center',
+                  marginTop: 12,
+                }}>
+                <Text style={{ color: t.text, fontSize: 14, fontFamily: 'Manrope_700Bold' }}>
+                  {loc.resource_close || 'Close'}
+                </Text>
+              </TouchableOpacity>
             </View>
           </View>
         </Modal>

@@ -10,7 +10,7 @@ import * as Haptics from 'expo-haptics';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
-import { getLang, setLang as setStorageLang } from '@/utils/storage';
+import { getLang, saveReport, setLang as setStorageLang, setUserZip } from '@/utils/storage';
 
 // ─── Theme — matches OneHealth splash ────────────────────────
 const P = {
@@ -435,17 +435,19 @@ export default function ReportFlow({ onSignUp, onReportSubmitted, onReturnHome, 
     }
   };
 
-  const submit = () => {
+  const submit = async () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     const animalObservationIds = animalObservations.filter((obs) => animalObservationOptions.some((option) => option.id === obs));
     const environmentObservationIds = environmentObservations.filter((obs) => environmentObservationOptions.some((option) => option.id === obs));
     const hasEnvironmentIncident = (incident: string) => environmentObservationIds.includes(incident);
     const reportZip = zip || animalZip || environmentZip;
+    const submittedAt = new Date().toISOString();
+    const reportId = uid();
     const payload = {
       feeling,
       category: cats,
       zip_code: reportZip,
-      submitted_at: new Date().toISOString(), id: uid(),
+      submitted_at: submittedAt, id: reportId,
       ...(usesHumanSymptomFlow ? {
         reporting_for: reportSubject || null,
         symptoms: symptoms.map(s => s.toLowerCase()),
@@ -479,7 +481,49 @@ export default function ReportFlow({ onSignUp, onReportSubmitted, onReturnHome, 
       } : {}),
     };
     console.log('Report:', JSON.stringify(payload, null, 2));
-    if (onReportSubmitted) void onReportSubmitted();
+
+    const submittedDate = new Date(submittedAt);
+    const observationIds = [...animalObservationIds, ...environmentObservationIds];
+
+    try {
+      await saveReport({
+        id: reportId,
+        feeling,
+        category: cats,
+        symptoms: usesHumanSymptomFlow ? symptoms : undefined,
+        observations: observationIds.length > 0 ? observationIds : undefined,
+        zip: reportZip,
+        date: `${MONTH_NAMES[submittedDate.getMonth()]} ${submittedDate.getDate()}, ${submittedDate.getFullYear()}`,
+        submittedAt,
+        reportSubject: reportSubject || undefined,
+        otherSymptomText: symptoms.includes('Other') ? otherSym || undefined : undefined,
+        sickCount: usesHumanSymptomFlow ? parseInt(sickCount, 10) || 1 : undefined,
+        onset: onset || undefined,
+        diagnosed: diagnosed === 'Yes' ? true : diagnosed === 'No' ? false : null,
+        absentFromWorkSchool: absentFromWorkSchool === 'Yes' ? true : absentFromWorkSchool === 'No' ? false : null,
+        animalTypes: usesAnimalFlow ? animalTypes : undefined,
+        animalObservations: usesAnimalFlow ? animalObservationIds : undefined,
+        animalIncidentDate: usesAnimalFlow ? animalIncidentDate || undefined : undefined,
+        animalSpecies: usesAnimalFlow ? animalSpecies || undefined : undefined,
+        animalAffectedCount: usesAnimalFlow ? parseInt(animalAffectedCount, 10) || undefined : undefined,
+        animalOtherIncidentDetails: usesAnimalFlow && animalObservations.includes('Other') ? animalOtherIncidentDetails || undefined : undefined,
+        animalNotes: usesAnimalFlow ? animalNotes || undefined : undefined,
+        environmentObservations: usesEnvironmentFlow ? environmentObservationIds : undefined,
+        environmentIncidentDate: usesEnvironmentFlow ? environmentIncidentDate || undefined : undefined,
+        environmentVectorDensity: usesEnvironmentFlow ? environmentVectorDensity || undefined : undefined,
+        environmentNotes: usesEnvironmentFlow ? environmentNotes || undefined : undefined,
+      });
+
+      if (reportZip) {
+        await setUserZip(reportZip);
+      }
+    } catch (error) {
+      console.log('Failed to save local report:', error);
+    }
+
+    if (onReportSubmitted) {
+      await onReportSubmitted();
+    }
     go(step + 1);
   };
 
@@ -514,7 +558,7 @@ export default function ReportFlow({ onSignUp, onReportSubmitted, onReturnHome, 
 
   const handleNext = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (isLastBeforeDone) { submit(); } else { go(step + 1); }
+    if (isLastBeforeDone) { void submit(); } else { go(step + 1); }
   };
 
   const handleClose = () => {
