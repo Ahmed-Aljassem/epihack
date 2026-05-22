@@ -252,7 +252,7 @@ export default function ReportFlow({ onSignUp }: { onSignUp?: () => void }) {
       symptoms: symptoms.map(s => s.toLowerCase()),
       other_symptom_text: symptoms.includes('Other') ? otherSym : null,
       people_sick_count: parseInt(sickCount) || 1,
-      zip_code: zip, coords, photo,
+      zip_code: zip, photo, // privacy: ZIP only, never exact coords
       symptom_start: onset.toLowerCase(),
       professionally_diagnosed: diagnosed === 'Yes' ? true : diagnosed === 'No' ? false : null,
       diagnosis: diagnosed === 'Yes' ? diagName : null,
@@ -263,7 +263,7 @@ export default function ReportFlow({ onSignUp }: { onSignUp?: () => void }) {
       category: cats,
       observations,
       notes: goodNotes || null,
-      zip_code: zip, coords,
+      zip_code: zip, // privacy: ZIP only, never exact coords
       submitted_at: new Date().toISOString(), id: uid(),
     };
     console.log('Report:', JSON.stringify(payload, null, 2));
@@ -684,6 +684,7 @@ export default function ReportFlow({ onSignUp }: { onSignUp?: () => void }) {
 
 // ─── Confirmation ────────────────────────────────────────────
 function Done({ t, mode, reset, onSignUp, loc }: { t: Th; mode: string; reset: () => void; onSignUp?: () => void; loc: any }) {
+  const router = useRouter();
   const sc = useRef(new Animated.Value(0)).current;
   const fd = useRef(new Animated.Value(0)).current;
   useEffect(() => {

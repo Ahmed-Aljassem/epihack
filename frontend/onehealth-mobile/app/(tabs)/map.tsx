@@ -1,16 +1,32 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, useColorScheme, ActivityIndicator } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, LayoutAnimation, Platform, UIManager } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import * as Location from 'expo-location';
 
-import { buildMapHTML, SUB_COLOR } from '@/lib/leafletMap';
-import { aggregateMarkers, generateDummyPoints, getSubmittedPoints, type ReportType } from '@/lib/reports';
+import { useFocusEffect } from 'expo-router';
+
+import { buildMapHTML, SUB_COLOR, type ToggleKey } from '@/lib/leafletMap';
+import { aggregateMarkers, generateDummyPoints, getSubmittedPoints, getLatestReport, getZipCentroid } from '@/lib/reports';
 import { RESOURCE_GROUPS, fetchResources, type ResourceGroup } from '@/lib/resources';
 import { SYMPTOM_LABELS, SYMPTOM_COLORS, type Symptom } from '@/lib/reports';
 
+
+// Centered on when GPS is denied/unavailable — ZIP 85721 (University of
+// Arizona, Tucson). The opening animation zooms in to this point. [lat, lng].
+const FALLBACK_CENTER: [number, number] = [32.2290, -110.9508];
+
+// Persists for the app session (resets on restart) so the zoom intro plays
+// only on the first map open of a session.
+let introPlayed = false;
+
+// LayoutAnimation needs an explicit opt-in on Android for the panel collapse.
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 // Minimal palette mirroring ReportFlow's brand colors.
 const TH = {
@@ -18,20 +34,23 @@ const TH = {
   dark: { bg: '#000', card: '#111', text: '#EEE', sub: '#888', line: '#1A1A1A', accent: '#4CAF50', bar: 'light' as const },
 };
 
-// Each toggle row; the Human row shows two swatches (sick + healthy).
-const LAYERS: { type: ReportType; label: string; swatches: string[] }[] = [
-  { type: 'human', label: 'Human (sick / healthy)', swatches: [SUB_COLOR.humanSick, SUB_COLOR.humanHealthy] },
+// Each toggle row maps 1:1 to a heat sub-layer.
+const LAYERS: { type: ToggleKey; label: string; swatches: string[] }[] = [
+  { type: 'humanSick', label: 'Human (sick)', swatches: [SUB_COLOR.humanSick] },
+  { type: 'humanHealthy', label: 'Human (healthy)', swatches: [SUB_COLOR.humanHealthy] },
   { type: 'animal', label: 'Animal', swatches: [SUB_COLOR.animal] },
   { type: 'environment', label: 'Environment', swatches: [SUB_COLOR.environment] },
 ];
 
 export default function MapScreen() {
-  const scheme = useColorScheme();
-  const t = scheme === 'dark' ? TH.dark : TH.light;
+  // The map overlay (title chip, search bar, layer panel) is always light/white
+  // — it sits over a light OSM map, so a dark theme would clash.
+  const t = TH.light;
 
   const webRef = useRef<WebView>(null);
-  const [visible, setVisible] = useState<Record<ReportType, boolean>>({
-    human: true,
+  const [visible, setVisible] = useState<Record<ToggleKey, boolean>>({
+    humanSick: true,
+    humanHealthy: true,
     animal: true,
     environment: true,
   });
@@ -47,13 +66,100 @@ const [selectedSymptoms, setSelectedSymptoms] = useState<Set<Symptom>>(new Set()
   });
   const [loadingRes, setLoadingRes] = useState<Partial<Record<ResourceGroup, boolean>>>({});
   const loadedRef = useRef<Set<ResourceGroup>>(new Set()); // groups already fetched this session
+  const [panelOpen, setPanelOpen] = useState(true); // bottom layers/resources panel expanded?
+  const [search, setSearch] = useState(''); // ZIP search box
+
+  const togglePanel = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setPanelOpen((o) => !o);
+  }, []);
 
   const html = useMemo(() => buildMapHTML(), []);
+  const readyRef = useRef(false); // becomes true once the WebView reports READY
+  const lastSeqRef = useRef(0);   // seq of the latest report we've already flown to
+  const initSentRef = useRef(false);          // INIT_VIEW sent once per mount
+  const coordsRef = useRef<[number, number] | null>(null); // resolved GPS, or null
+  const [locResolved, setLocResolved] = useState(false);   // GPS attempt finished
+
+  // Generate the AZ dummy backdrop once so re-pushing data (on focus) doesn't
+  // reshuffle the heatmap — only the submitted points change between pushes.
+  const dummyPoints = useMemo(() => generateDummyPoints(), []);
 
   const send = useCallback((msg: object) => {
     const raw = JSON.stringify(msg);
     webRef.current?.injectJavaScript(`window.handleMessage(${JSON.stringify(raw)}); true;`);
   }, []);
+
+  // Zoom + filter the map to a ZIP (centroid resolved from the table). Takes the
+  // value directly so it can run from onChangeText without waiting on state.
+  const doSearch = useCallback((raw: string) => {
+    const zip = raw.trim();
+    if (!zip.length) { send({ kind: 'SEARCH_ZIP', zip: null, center: null }); return; }
+    send({ kind: 'SEARCH_ZIP', zip, center: getZipCentroid(zip) });
+  }, [send]);
+
+  // Auto-search as soon as a full 5-digit ZIP is entered (the number-pad has no
+  // return key, so we don't rely on submit), and reset when the box is cleared.
+  const onSearchChange = useCallback((v: string) => {
+    setSearch(v);
+    const z = v.trim();
+    if (z.length === 5) doSearch(z);
+    else if (z.length === 0) doSearch('');
+  }, [doSearch]);
+
+  const clearSearch = useCallback(() => {
+    setSearch('');
+    send({ kind: 'SEARCH_ZIP', zip: null, center: null });
+  }, [send]);
+
+  // Push current data (dummy + live submitted reports) and the latest-report
+  // marker into the map. Safe to call repeatedly once the WebView is ready.
+  const pushData = useCallback(() => {
+    const points = [...dummyPoints, ...getSubmittedPoints()];
+    send({ kind: 'SET_DATA', points, markers: aggregateMarkers(points) });
+    // Fly to the report only if it's one we haven't centered on yet.
+    const latest = getLatestReport();
+    const focus = !!latest && latest.seq !== lastSeqRef.current;
+    if (latest) lastSeqRef.current = latest.seq;
+    send({ kind: 'SET_LATEST', point: latest, focus });
+  }, [dummyPoints, send]);
+
+  // Resolve the user's location once on mount: try GPS, fall back to null
+  // (denied/error) so maybeInit can use FALLBACK_CENTER.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (!cancelled && status === 'granted') {
+          const pos = await Location.getCurrentPositionAsync({});
+          coordsRef.current = [pos.coords.latitude, pos.coords.longitude];
+        }
+      } catch {
+        // ignore — fall back below
+      } finally {
+        if (!cancelled) setLocResolved(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Center the map once both the WebView is ready and the GPS attempt is done.
+  // A freshly-submitted report's fly-to (SET_LATEST) takes precedence over the
+  // intro, so skip INIT_VIEW entirely when there's a latest report.
+  const maybeInit = useCallback(() => {
+    if (initSentRef.current || !readyRef.current || !locResolved) return;
+    initSentRef.current = true;
+    if (getLatestReport()) return; // report fly-to will handle the view
+    const center = coordsRef.current ?? FALLBACK_CENTER;
+    const intro = !introPlayed;
+    introPlayed = true;
+    send({ kind: 'INIT_VIEW', center, intro });
+  }, [locResolved, send]);
+
+  // Fire maybeInit when the GPS attempt completes after READY.
+  useEffect(() => { maybeInit(); }, [maybeInit]);
 
   // The WebView posts { kind: 'READY' } once Leaflet is initialized.
   const onMessage = useCallback(
@@ -61,16 +167,25 @@ const [selectedSymptoms, setSelectedSymptoms] = useState<Set<Symptom>>(new Set()
       try {
         const msg = JSON.parse(e.nativeEvent.data);
         if (msg.kind === 'READY') {
-          const points = [...generateDummyPoints(), ...getSubmittedPoints()];
-          send({ kind: 'SET_DATA', points, markers: aggregateMarkers(points) });
+          readyRef.current = true;
+          pushData();
+          maybeInit();
         }
       } catch {}
     },
-    [send]
+    [pushData, maybeInit]
+  );
+
+  // Re-push whenever the map tab regains focus, so reports submitted elsewhere
+  // (the WebView stays mounted, so READY won't fire again) show up live.
+  useFocusEffect(
+    useCallback(() => {
+      if (readyRef.current) pushData();
+    }, [pushData])
   );
 
   const toggle = useCallback(
-    (type: ReportType) => {
+    (type: ToggleKey) => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       setVisible((prev) => {
         const on = !prev[type];
@@ -161,12 +276,54 @@ const [selectedSymptoms, setSelectedSymptoms] = useState<Set<Symptom>>(new Set()
             Report Heatmap
           </Text>
         </View>
+
+        {/* Search bar — pinned at the top. Tap the icon (or submit) to fly to +
+            filter the map to a ZIP or a place / tribal-district name. */}
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 8,
+            marginHorizontal: 16,
+            marginTop: 10,
+            paddingHorizontal: 12,
+            paddingVertical: 10,
+            borderRadius: 12,
+            backgroundColor: t.card,
+            shadowColor: '#000',
+            shadowOpacity: 0.12,
+            shadowRadius: 8,
+            shadowOffset: { width: 0, height: 2 },
+            elevation: 4,
+          }}
+        >
+          <TouchableOpacity onPress={() => doSearch(search)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="search" size={16} color={t.sub} />
+          </TouchableOpacity>
+          <TextInput
+            value={search}
+            onChangeText={onSearchChange}
+            onSubmitEditing={() => doSearch(search)}
+            placeholder="Search ZIP code"
+            placeholderTextColor={t.sub}
+            keyboardType="number-pad"
+            returnKeyType="search"
+            maxLength={5}
+            style={{ flex: 1, color: t.text, fontSize: 15, padding: 0 }}
+          />
+          {search.length > 0 && (
+            <TouchableOpacity onPress={clearSearch} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="close-circle" size={18} color={t.sub} />
+            </TouchableOpacity>
+          )}
+        </View>
       </SafeAreaView>
 
       <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }} pointerEvents="box-none">
         <View
           style={{
-            margin: 16,
+            marginHorizontal: 16,
+            marginBottom: 16,
             padding: 8,
             borderRadius: 16,
             backgroundColor: t.card,
@@ -177,6 +334,27 @@ const [selectedSymptoms, setSelectedSymptoms] = useState<Set<Symptom>>(new Set()
             elevation: 4,
           }}
         >
+          {/* Grab handle — tap to collapse/expand the whole panel. */}
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={togglePanel}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              paddingTop: 2,
+              paddingBottom: panelOpen ? 6 : 2,
+            }}
+          >
+            {!panelOpen && (
+              <Text style={{ color: t.sub, fontSize: 13, fontWeight: '600' }}>Layers & Resources</Text>
+            )}
+            <Ionicons name={panelOpen ? 'chevron-down' : 'chevron-up'} size={16} color={t.sub} />
+          </TouchableOpacity>
+
+          {panelOpen && (
+          <>
           <View
             style={{
               flexDirection: 'row',
@@ -195,10 +373,7 @@ const [selectedSymptoms, setSelectedSymptoms] = useState<Set<Symptom>>(new Set()
                 <TouchableOpacity
                   key={key}
                   activeOpacity={0.8}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setPanelTab(key);
-                  }}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setPanelTab(key); send({ kind: 'SET_VIEW', view: key }); }}
                   style={{
                     flex: 1,
                     paddingVertical: 8,
@@ -258,7 +433,7 @@ const [selectedSymptoms, setSelectedSymptoms] = useState<Set<Symptom>>(new Set()
                         {label}
                       </Text>
 
-                      {type === 'human' && (
+                      {type === 'humanSick' && (
                         <TouchableOpacity
                           onPress={() => {
                             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -291,7 +466,7 @@ const [selectedSymptoms, setSelectedSymptoms] = useState<Set<Symptom>>(new Set()
                       </View>
                     </TouchableOpacity>
 
-                    {type === 'human' && symptomsOpen && (
+                    {type === 'humanSick' && symptomsOpen && (
                       <View style={{ borderTopWidth: 1, borderTopColor: t.line, paddingBottom: 4 }}>
                         <View
                           style={{
@@ -435,6 +610,8 @@ const [selectedSymptoms, setSelectedSymptoms] = useState<Set<Symptom>>(new Set()
                   </TouchableOpacity>
                 );
               })}
+          </>
+          )}
         </View>
       </View>
     </View>
