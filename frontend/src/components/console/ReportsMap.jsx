@@ -339,6 +339,7 @@ export default function ReportsMap({
   onSelectReport,
   mapStyle = "mapbox://styles/mapbox/light-v11",
   viewMode = "points",
+  showReportLink = true,
 }) {
   const mapRef = useRef(null);
   const [popup, setPopup] = useState(null);
@@ -563,13 +564,15 @@ export default function ReportsMap({
               {popup.properties.coords ? ` · ${popup.properties.coords}` : ""}
               {popup.properties.sourceType === "vector" ? ` · ${popup.properties.sourceTypeLabel}` : ""}
             </div>
-            <Link
-              to={`/agency/reports/${popup.properties.id}`}
-              className="reports-popup-link"
-            >
-              View detail
-              <ExternalLink size={12} strokeWidth={2} />
-            </Link>
+            {showReportLink && (
+              <Link
+                to={`/agency/reports/${popup.properties.id}`}
+                className="reports-popup-link"
+              >
+                View detail
+                <ExternalLink size={12} strokeWidth={2} />
+              </Link>
+            )}
           </Popup>
         )}
 

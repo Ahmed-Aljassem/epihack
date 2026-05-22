@@ -187,8 +187,8 @@ export default function MapPage() {
         />
       )}
 
-      <div className="console-grid-2" style={{ gridTemplateColumns: "1.7fr 1fr" }}>
-        <div className="card map-card">
+      <div className="map-stack">
+        <div className="card map-card map-card--full">
           <div className="map-card-header">
             <div>
               <div className="map-card-title">Spatial view</div>
@@ -231,7 +231,7 @@ export default function MapPage() {
             resourceMarkers={resourceMarkers}
             showReports={showReports}
             showResources={showResources}
-            height={520}
+            height={600}
             initialView={mapView}
             viewMode={mapMode}
             onSelectReport={(id) => {
@@ -268,39 +268,50 @@ export default function MapPage() {
           )}
         </div>
 
-        <div className="card queue-card map-panel">
+        <div className="card queue-card map-visible-card">
           <div className="queue-header">
-            <div className="map-card-title">Visible reports</div>
+            <div>
+              <div className="map-card-title">Visible reports</div>
+              <div className="map-card-subtitle">
+                Reports matching the current filters and map scope.
+              </div>
+            </div>
             <span className="preview-meta">{visibleReports.length} in view</span>
           </div>
-          <div style={{ maxHeight: 520, overflow: "auto" }}>
-            <table className="queue-table">
+          <div className="map-visible-scroll">
+            <table className="queue-table map-visible-table">
               <thead>
                 <tr>
-                  <th>ID</th>
-                  <th>Category</th>
-                  <th>Status</th>
-                  <th />
+                  <th className="col-id">ID</th>
+                  <th className="col-category">Category</th>
+                  <th className="col-summary">Summary</th>
+                  <th className="col-zip">ZIP</th>
+                  <th className="col-status">Status</th>
+                  <th className="col-submitted">Submitted</th>
+                  <th className="col-chev" />
                 </tr>
               </thead>
               <tbody>
                 {visibleReports.map((r) => (
                   <tr key={r.id} onClick={() => navigate(`/agency/reports/${r.id}`)}>
-                    <td>{r.id}</td>
-                    <td>
+                    <td className="col-id">{r.id}</td>
+                    <td className="col-category">
                       <span className={`badge badge-${r.categorySlug}`}>{r.category}</span>
                     </td>
-                    <td>
+                    <td className="col-summary">{r.summary}</td>
+                    <td className="col-zip">{r.location?.zip || "—"}</td>
+                    <td className="col-status">
                       <span className={`queue-status ${r.status === "New" ? "queue-status--new" : ""}`}>
                         {r.status}
                       </span>
                     </td>
-                    <td className="queue-chev"><ChevronRight size={16} /></td>
+                    <td className="col-submitted">{r.submittedShort}</td>
+                    <td className="col-chev queue-chev"><ChevronRight size={16} /></td>
                   </tr>
                 ))}
                 {visibleReports.length === 0 && (
                   <tr>
-                    <td colSpan={4} style={{ padding: 24, color: "var(--muted)", textAlign: "center" }}>
+                    <td colSpan={7} className="map-visible-empty">
                       {loading
                         ? "Loading reports…"
                         : error

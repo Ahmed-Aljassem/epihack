@@ -89,7 +89,7 @@ export function buildSignalBreakdown(reports, limit = 8) {
   const totalReports = Math.max(reports.length, 1);
 
   reports.forEach((report) => {
-    const seen = new Set(report.analytics?.signalTags || []);
+    const seen = new Set(deriveSignalTags(report));
     seen.forEach((tag) => {
       const current = tags.get(tag) || {
         key: slugify(tag),
@@ -126,6 +126,37 @@ export function buildSignalBreakdown(reports, limit = 8) {
     })
     .sort((a, b) => b.count - a.count || b.impact - a.impact || a.label.localeCompare(b.label))
     .slice(0, limit);
+}
+
+function deriveSignalTags(report) {
+  const analytics = report.analytics || {};
+  const explicit = analytics.signalTags || [];
+  if (explicit.length) {
+    return explicit.filter(Boolean);
+  }
+
+  const fallback = [
+    ...(analytics.symptoms || []),
+    ...(analytics.severeSignals || []),
+    ...(analytics.clinicalSigns || []),
+    analytics.signalType,
+    analytics.vectorType ? `${analytics.vectorType} activity` : null,
+    analytics.unusualIncrease ? "Unusual vector increase" : null,
+    analytics.numAnimalsDead > 0 ? "Animal deaths" : null,
+    analytics.biteReports > 0 ? "Bite reports" : null,
+    analytics.severityLevel === "High" ? "High-priority hazard" : null,
+  ].filter(Boolean);
+
+  if (fallback.length) {
+    return [...new Set(fallback)];
+  }
+
+  const summarySeed = String(report.summary || "").split(/[,.]/)[0]?.trim();
+  if (summarySeed) {
+    return [summarySeed];
+  }
+
+  return ["Field signal"];
 }
 
 function createBuckets(reports, range, now, bucketMode) {

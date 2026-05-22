@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { Shield } from "lucide-react";
 
 const NAV_LINKS = [
+  { to: "#situation", label: "Situation" },
   { to: "#about",    label: "About" },
   { to: "#how",      label: "How it works" },
   { to: "#partners", label: "Partners" },

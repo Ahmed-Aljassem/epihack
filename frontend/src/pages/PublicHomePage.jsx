@@ -14,6 +14,7 @@ import {
   LANDING_PARTNERS,
   FOOTER_LINKS,
 } from "../data/publicContent";
+import PublicSituationSection from "../components/public/PublicSituationSection";
 
 const PILLAR_ICONS = {
   mobile: Smartphone,
@@ -42,6 +43,8 @@ export default function PublicHomePage() {
             </Link>
           </div>
         </section>
+
+        <PublicSituationSection />
 
         <section id="about" className="landing-pillars">
           {LANDING_PILLARS.map((pillar) => {
