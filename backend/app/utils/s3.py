@@ -6,8 +6,8 @@ settings = get_settings()
 _s3 = boto3.client(
     "s3",
     region_name=settings.DYNAMO_REGION,
-    aws_access_key_id=settings.DYNAMO_ACCESS_KEY_ID,
-    aws_secret_access_key=settings.DYNAMO_SECRET_ACCESS_KEY,
+    aws_access_key_id=settings.DYNAMO_ACCESS_KEY_ID or None,
+    aws_secret_access_key=settings.DYNAMO_SECRET_ACCESS_KEY or None,
 )
 
 

@@ -14,8 +14,8 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
 
     # AWS credentials (shared by DynamoDB and S3)
-    DYNAMO_ACCESS_KEY_ID: str = ""
-    DYNAMO_SECRET_ACCESS_KEY: str = ""
+    DYNAMO_ACCESS_KEY_ID: str | None = None
+    DYNAMO_SECRET_ACCESS_KEY: str | None = None
     DYNAMO_REGION: str = "us-east-2"
 
     # DynamoDB tables
