@@ -2,8 +2,7 @@ import { useEffect, useState } from "react";
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, FileText, Map, Mail,
-  ClipboardList, Inbox,
-  BookOpen, Settings, Users, LogOut, Menu, X,
+  User, Settings, LogOut, Menu, X,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 
@@ -11,25 +10,17 @@ const NAV_GROUPS = [
   {
     label: "Triage",
     items: [
-      { to: "/agency/dashboard", icon: LayoutDashboard, label: "Dashboard", end: true },
-      { to: "/agency/reports",   icon: FileText,        label: "Reports" },
       { to: "/agency/map",       icon: Map,             label: "Map" },
+      { to: "/agency/dashboard", icon: LayoutDashboard, label: "Analytics", end: true },
       { to: "/agency/alerts",    icon: Mail,            label: "Alerts" },
+      { to: "/agency/reports",   icon: FileText,        label: "Reports" },
     ],
   },
   {
-    label: "Surveys",
+    label: "Account",
     items: [
-      { to: "/agency/surveys",      icon: ClipboardList, label: "Surveys" },
-      { to: "/agency/my-responses", icon: Inbox,         label: "My responses" },
-    ],
-  },
-  {
-    label: "Library",
-    items: [
-      { to: "/agency/resources", icon: BookOpen, label: "Resources" },
-      { to: "/agency/routing",   icon: Settings, label: "Routing rules" },
-      { to: "/agency/team",      icon: Users,    label: "Team" },
+      { to: "/agency/profile",  icon: User,     label: "Profile" },
+      { to: "/agency/settings", icon: Settings, label: "Settings" },
     ],
   },
 ];

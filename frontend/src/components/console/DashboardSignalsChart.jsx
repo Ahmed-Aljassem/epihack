@@ -66,17 +66,17 @@ export default function DashboardSignalsChart({ reports }) {
         <span className="preview-meta">Top 8 patterns</span>
       </div>
 
-      {reports.length === 0 ? (
+      {data.length === 0 ? (
         <div className="chart-empty">
           Symptom and field-signal patterns appear here once reports are in scope.
         </div>
       ) : (
         <div className="chart-shell">
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height={Math.max(data.length * 36 + 24, 260)}>
             <BarChart
               data={data}
               layout="vertical"
-              margin={{ top: 4, right: 24, left: 24, bottom: 4 }}
+              margin={{ top: 4, right: 40, left: 24, bottom: 4 }}
             >
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.18)" horizontal={false} />
               <XAxis

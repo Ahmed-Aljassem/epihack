@@ -30,6 +30,8 @@ const ReportSentPage = lazy(() => import("./pages/ReportSentPage"));
 const UserLoginPage = lazy(() => import("./pages/UserLoginPage"));
 const UserRegisterPage = lazy(() => import("./pages/UserRegisterPage"));
 const UserDashboardPage = lazy(() => import("./pages/UserDashboardPage"));
+const ProfilePage = lazy(() => import("./pages/ProfilePage"));
+const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -46,7 +48,7 @@ function ProtectedRoute({ children }) {
 function GuestRoute({ children }) {
   const { user, loading } = useAuth();
   if (loading) return null;
-  return !user ? children : <Navigate to="/agency/dashboard" replace />;
+  return !user ? children : <Navigate to="/agency/map" replace />;
 }
 
 function UserProtectedRoute({ children }) {
@@ -134,7 +136,7 @@ export default function App() {
             >
               <Route
                 index
-                element={<Navigate to="/agency/dashboard" replace />}
+                element={<Navigate to="/agency/map" replace />}
               />
               <Route path="dashboard" element={<DashboardPage />} />
               <Route path="reports" element={<ReportsListPage />} />
@@ -149,6 +151,8 @@ export default function App() {
               <Route path="surveys" element={<SurveysPage />} />
               <Route path="surveys/:id" element={<SurveyDetailPage />} />
               <Route path="my-responses" element={<MyResponsesPage />} />
+              <Route path="profile" element={<ProfilePage />} />
+              <Route path="settings" element={<SettingsPage />} />
             </Route>
 
             {/* Legacy starter routes */}

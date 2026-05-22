@@ -66,6 +66,7 @@ export const FOOTER_LINKS = {
     { label: "Mobile app (Android)", to: "#mobile" },
   ],
   resources: [
+    { label: "Situation map", to: "#situation" },
     { label: "About", to: "#about" },
     { label: "How it works", to: "#how" },
     { label: "Partners", to: "#partners" },

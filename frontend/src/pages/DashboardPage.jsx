@@ -285,22 +285,44 @@ export default function DashboardPage() {
           {topCluster ? (
             <>
               <div className="cluster-eyebrow">
-                {clusters.length} cluster{clusters.length === 1 ? "" : "s"} detected
+                Top cluster · {clusters.length} active overall
               </div>
               <div className="cluster-title">
-                {topCluster.count} {topCluster.category.toLowerCase()} reports clustering
+                {topCluster.count} {topCluster.category.toLowerCase()} reports
+                in a ~{topCluster.radiusMi}-mile area
               </div>
               <p className="cluster-copy">
-                {topCluster.count} reports within ~{topCluster.radiusMi} mi over the
-                last {topCluster.windowDays} days. ZIP coverage {topCluster.zipSummary}
-                {topCluster.zipCount > 3 ? ` + ${topCluster.zipCount - 3} more` : ""}.
+                Submitted in the last {topCluster.windowDays} days, concentrated
+                around ZIP {topCluster.zipSummary}
+                {topCluster.zipCount > 3
+                  ? ` and ${topCluster.zipCount - 3} nearby ZIP${topCluster.zipCount - 3 === 1 ? "" : "s"}`
+                  : ""}
+                . Worth reviewing before it spreads.
               </p>
+              <dl className="cluster-stats">
+                <div className="cluster-stat">
+                  <dt>Reports</dt>
+                  <dd>{topCluster.count}</dd>
+                </div>
+                <div className="cluster-stat">
+                  <dt>Radius</dt>
+                  <dd>~{topCluster.radiusMi} mi</dd>
+                </div>
+                <div className="cluster-stat">
+                  <dt>Window</dt>
+                  <dd>{topCluster.windowDays}d</dd>
+                </div>
+                <div className="cluster-stat">
+                  <dt>ZIPs</dt>
+                  <dd>{topCluster.zipCount}</dd>
+                </div>
+              </dl>
               <div className="cluster-actions">
                 <button
                   className="btn btn-ghost"
                   onClick={() => navigate(`/agency/map?cluster=${topCluster.id}`)}
                 >
-                  View cluster
+                  View on map
                 </button>
                 <button
                   className="btn btn-primary"
