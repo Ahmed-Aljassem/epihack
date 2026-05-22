@@ -8,7 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useNavigation } from 'expo-router';
-import { getReportStats, getUserZip, hasCompletedFirstReport, setFirstReportComplete, incrementReportCount } from '@/utils/storage';
+import { getReportStats, getUserZip, hasCompletedFirstReport, setFirstReportComplete, incrementReportCount, getHomeWidgets, setHomeWidgets as saveHomeWidgets } from '@/utils/storage';
 import { useLang } from '@/utils/i18n';
 import ReportFlow from '@/components/flows/ReportFlow';
 
@@ -47,7 +47,17 @@ const RECENT = [
   { icon: 'leaf-outline' as const, title: 'Mosquito surge', sub: 'Green Valley', time: '1d ago' },
 ];
 
-type HomeWidgetId = 'map' | 'rewards' | 'news';
+type HomeWidgetId =
+  | 'environment'
+  | 'health'
+  | 'alert'
+  | 'forecast'
+  | 'quick'
+  | 'impact'
+  | 'recent'
+  | 'map'
+  | 'rewards'
+  | 'news';
 
 const HOME_WIDGETS: {
   id: HomeWidgetId;
@@ -55,10 +65,19 @@ const HOME_WIDGETS: {
   sub: string;
   icon: keyof typeof Ionicons.glyphMap;
 }[] = [
+  { id: 'environment', title: 'Environment', sub: 'Weather, air, pollen, UV, and humidity', icon: 'leaf-outline' },
+  { id: 'health', title: 'Health near you', sub: 'Track local illness signals', icon: 'pulse-outline' },
+  { id: 'alert', title: 'Alert', sub: 'Important nearby health alerts', icon: 'warning-outline' },
+  { id: 'forecast', title: 'Forecast', sub: 'Upcoming health risk trends', icon: 'analytics-outline' },
+  { id: 'quick', title: 'Quick report', sub: 'Photo, voice, and family shortcuts', icon: 'create-outline' },
+  { id: 'impact', title: 'Your impact', sub: 'Reports, streaks, and contribution', icon: 'trophy-outline' },
+  { id: 'recent', title: 'Recent near you', sub: 'Latest nearby community reports', icon: 'time-outline' },
   { id: 'map', title: 'Map', sub: 'See nearby signals and reports', icon: 'map-outline' },
   { id: 'rewards', title: 'Rewards', sub: 'Track streaks and impact', icon: 'trophy-outline' },
   { id: 'news', title: 'News', sub: 'Latest public health updates', icon: 'newspaper-outline' },
 ];
+
+const HOME_WIDGET_IDS = new Set<HomeWidgetId>(HOME_WIDGETS.map((widget) => widget.id));
 
 export default function HomeScreen() {
   const navigation = useNavigation();
@@ -96,8 +115,14 @@ export default function HomeScreen() {
   const screenOpacity = useRef(new Animated.Value(1)).current;
 
   const load = useCallback(async () => {
-    setZip(await getUserZip());
-    setStats(await getReportStats());
+    const [nextZip, nextStats, savedWidgets] = await Promise.all([
+      getUserZip(),
+      getReportStats(),
+      getHomeWidgets(),
+    ]);
+    setZip(nextZip);
+    setStats(nextStats);
+    setHomeWidgets(savedWidgets.filter((id): id is HomeWidgetId => HOME_WIDGET_IDS.has(id as HomeWidgetId)));
   }, []);
 
   const checkFirstReportPrompt = useCallback(async () => {
@@ -229,11 +254,191 @@ export default function HomeScreen() {
 
   const addHomeWidget = (id: HomeWidgetId) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setHomeWidgets((prev) => prev.includes(id) ? prev : [...prev, id]);
+    const nextWidgets = homeWidgets.includes(id) ? homeWidgets : [...homeWidgets, id];
+    setHomeWidgets(nextWidgets);
+    void saveHomeWidgets(nextWidgets);
+    setShowWidgetPicker(false);
+  };
+
+  const removeHomeWidget = (id: HomeWidgetId) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const nextWidgets = homeWidgets.filter((widgetId) => widgetId !== id);
+    setHomeWidgets(nextWidgets);
+    void saveHomeWidgets(nextWidgets);
     setShowWidgetPicker(false);
   };
 
   const renderHomeWidget = (id: HomeWidgetId) => {
+    if (id === 'environment') {
+      return (
+        <View key={id}>
+          <SLabel icon="leaf-outline">{loc.dash_env || 'Environment'}</SLabel>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ gap: 8, paddingRight: 2 }}>
+            {VITALS.map((v, i) => (
+              <View key={i} style={{
+                backgroundColor: t.card, borderRadius: 14, paddingVertical: 12, paddingHorizontal: 14,
+                flexDirection: 'row', alignItems: 'center', gap: 10,
+              }}>
+                <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: t.fill, alignItems: 'center', justifyContent: 'center' }}>
+                  <Ionicons name={v.icon} size={16} color={t.sub} />
+                </View>
+                <View>
+                  <Text style={{ color: t.text, fontSize: 15, fontFamily: 'Manrope_700Bold', letterSpacing: -0.3 }}>{v.value}</Text>
+                  <Text style={{ color: t.hint, fontSize: 11, fontFamily: 'Manrope_500Medium', marginTop: 1 }}>{v.label}</Text>
+                </View>
+              </View>
+            ))}
+          </ScrollView>
+        </View>
+      );
+    }
+
+    if (id === 'health') {
+      return (
+        <View key={id}>
+          <SLabel icon="pulse-outline">{loc.dash_health || 'Health near you'}</SLabel>
+          {DISEASES.map((d, i) => {
+            const on = d.alert;
+            return (
+              <TouchableOpacity key={i} activeOpacity={0.7}
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/(tabs)/map'); }}
+                style={{
+                  flexDirection: 'row', alignItems: 'center', gap: 14,
+                  backgroundColor: on ? t.accentSoft : t.card, borderRadius: 14,
+                  paddingVertical: 14, paddingHorizontal: 16, marginBottom: 8,
+                  borderWidth: 1.5, borderColor: on ? t.accent : 'transparent',
+                }}>
+                <View style={{
+                  width: 34, height: 34, borderRadius: 10,
+                  backgroundColor: on ? t.accentMid : t.fill,
+                  alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <Ionicons name={d.icon} size={16} color={on ? t.accent : t.sub} />
+                </View>
+                <Text style={{ flex: 1, color: t.text, fontSize: 16, fontFamily: 'Manrope_600SemiBold', letterSpacing: -0.3 }}>{d.name}</Text>
+                <Text style={{ color: d.alert ? t.accent : d.warn ? '#C07900' : t.hint, fontSize: 14, fontFamily: d.alert || d.warn ? 'Manrope_700Bold' : 'Manrope_500Medium' }}>{d.status}</Text>
+              </TouchableOpacity>
+            );
+          })}
+          <Text style={{ fontFamily: 'Manrope_400Regular', color: t.hint, fontSize: 11, marginTop: 4, paddingHorizontal: 4 }}>Based on 47 reports this week</Text>
+        </View>
+      );
+    }
+
+    if (id === 'alert') {
+      return (
+        <View key={id}>
+          <SLabel icon="warning-outline">{loc.dash_alert || 'Alert'}</SLabel>
+          <TouchableOpacity activeOpacity={0.7}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/alert-detail'); }}
+            style={{
+              flexDirection: 'row', alignItems: 'center', gap: 14,
+              backgroundColor: t.card, borderRadius: 14,
+              paddingVertical: 16, paddingHorizontal: 16,
+            }}>
+            <View style={{ width: 38, height: 38, borderRadius: 11, backgroundColor: '#FFF3E0', alignItems: 'center', justifyContent: 'center' }}>
+              <Ionicons name="warning" size={18} color="#E65100" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 16, color: t.text, fontFamily: 'Manrope_700Bold', letterSpacing: -0.4 }}>Respiratory anomaly in {zip}</Text>
+              <Text style={{ fontSize: 13, color: '#E65100', fontFamily: 'Manrope_500Medium', marginTop: 2 }}>225% above baseline - Accelerating</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={t.hint} />
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    if (id === 'forecast') {
+      return (
+        <View key={id}>
+          <SLabel icon="analytics-outline">{loc.dash_forecast || 'Forecast'}</SLabel>
+          <View style={{ backgroundColor: t.card, borderRadius: 14, padding: 16 }}>
+            <Text style={{ color: t.sub, fontSize: 15, lineHeight: 22, fontFamily: 'Manrope_400Regular', letterSpacing: -0.2 }}>
+              Stomach illness historically rises during finals week. Last year saw a 180% increase.
+            </Text>
+            <Text style={{ color: t.accent, fontSize: 14, fontFamily: 'Manrope_600SemiBold', marginTop: 8 }}>Elevated risk - next 5 days</Text>
+          </View>
+        </View>
+      );
+    }
+
+    if (id === 'quick') {
+      const quickActions = [
+        { icon: 'camera-outline' as const, label: 'Photo', onPress: async () => {
+          const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.6 });
+          if (!r.canceled) router.push('/report-modal');
+        }},
+        { icon: 'mic-outline' as const, label: 'Voice', onPress: () => Alert.alert('Coming Soon', 'Voice reporting is coming soon.') },
+        { icon: 'people-outline' as const, label: 'Family', onPress: () => router.push('/report-modal') },
+      ];
+
+      return (
+        <View key={id}>
+          <SLabel icon="create-outline">{loc.dash_quick || 'Quick report'}</SLabel>
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            {quickActions.map((a, i) => (
+              <TouchableOpacity key={i} activeOpacity={0.7}
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); a.onPress(); }}
+                style={{
+                  flex: 1, backgroundColor: t.card, borderRadius: 14,
+                  paddingVertical: 18, alignItems: 'center', gap: 8,
+                }}>
+                <View style={{ width: 38, height: 38, borderRadius: 11, backgroundColor: t.fill, alignItems: 'center', justifyContent: 'center' }}>
+                  <Ionicons name={a.icon} size={18} color={t.sub} />
+                </View>
+                <Text style={{ fontSize: 13, color: t.sub, fontFamily: 'Manrope_600SemiBold' }}>{a.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      );
+    }
+
+    if (id === 'impact') {
+      return (
+        <View key={id}>
+          <SLabel icon="trophy-outline">{loc.dash_impact || 'Your impact'}</SLabel>
+          <View style={{ backgroundColor: t.card, borderRadius: 18, paddingVertical: 20, alignItems: 'center' }}>
+            <Text style={{ color: t.hint, fontSize: 11, fontFamily: 'Manrope_700Bold', letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 4 }}>{loc.rep_sub || 'Reports submitted'}</Text>
+            <Text style={{ color: t.text, fontSize: 40, fontFamily: 'Manrope_800ExtraBold', letterSpacing: -1.5 }}>{stats.count || 0}</Text>
+            <Text style={{ color: t.sub, fontSize: 13, fontFamily: 'Manrope_500Medium', marginTop: 4 }}>
+              {stats.streak > 0 ? `${stats.streak} week streak` : 'Start reporting weekly'}
+            </Text>
+          </View>
+        </View>
+      );
+    }
+
+    if (id === 'recent') {
+      return (
+        <View key={id}>
+          <SLabel icon="time-outline">{loc.dash_recent || 'Recent near you'}</SLabel>
+          {RECENT.map((r, i) => (
+            <View key={i} style={{
+              flexDirection: 'row', alignItems: 'center', gap: 14,
+              backgroundColor: t.card, borderRadius: 14,
+              paddingVertical: 14, paddingHorizontal: 16, marginBottom: 8,
+            }}>
+              <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: t.fill, alignItems: 'center', justifyContent: 'center' }}>
+                <Ionicons name={r.icon} size={15} color={t.hint} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 15, color: t.text, fontFamily: 'Manrope_600SemiBold', letterSpacing: -0.3 }}>{r.title}</Text>
+                <Text style={{ fontSize: 12, color: t.hint, fontFamily: 'Manrope_500Medium', marginTop: 2 }}>{r.sub}</Text>
+              </View>
+              <Text style={{ fontFamily: 'Manrope_400Regular', fontSize: 11, color: t.hint }}>{r.time}</Text>
+            </View>
+          ))}
+          <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/(tabs)/map'); }}
+            style={{ backgroundColor: t.accentSoft, borderRadius: 14, paddingVertical: 14, alignItems: 'center', marginTop: 12 }}>
+            <Text style={{ color: t.accent, fontSize: 13, fontFamily: 'Manrope_500Medium' }}>{loc.see_all || 'See all reports'}</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
     if (id === 'map') {
       return (
         <TouchableOpacity key={id} activeOpacity={0.75}
@@ -270,20 +475,24 @@ export default function HomeScreen() {
       );
     }
 
-    return (
-      <View key={id} style={{ backgroundColor: t.card, borderRadius: 16, padding: 16, marginTop: 10, borderWidth: 1.5, borderColor: t.line }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-          <View style={{ width: 42, height: 42, borderRadius: 13, backgroundColor: '#E8F0FE', alignItems: 'center', justifyContent: 'center' }}>
-            <Ionicons name="newspaper-outline" size={20} color="#2F80ED" />
+    if (id === 'news') {
+      return (
+        <View key={id} style={{ backgroundColor: t.card, borderRadius: 16, padding: 16, marginTop: 10, borderWidth: 1.5, borderColor: t.line }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <View style={{ width: 42, height: 42, borderRadius: 13, backgroundColor: '#E8F0FE', alignItems: 'center', justifyContent: 'center' }}>
+              <Ionicons name="newspaper-outline" size={20} color="#2F80ED" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: t.text, fontSize: 16, fontFamily: 'Manrope_700Bold' }}>News</Text>
+              <Text style={{ color: t.sub, fontSize: 12, fontFamily: 'Manrope_500Medium', marginTop: 2 }}>Local health updates and alerts</Text>
+            </View>
+            <Ionicons name="open-outline" size={16} color={t.hint} />
           </View>
-          <View style={{ flex: 1 }}>
-            <Text style={{ color: t.text, fontSize: 16, fontFamily: 'Manrope_700Bold' }}>News</Text>
-            <Text style={{ color: t.sub, fontSize: 12, fontFamily: 'Manrope_500Medium', marginTop: 2 }}>Local health updates and alerts</Text>
-          </View>
-          <Ionicons name="open-outline" size={16} color={t.hint} />
         </View>
-      </View>
-    );
+      );
+    }
+
+    return null;
   };
 
   return (
@@ -391,153 +600,6 @@ export default function HomeScreen() {
               </TouchableOpacity>
             )}
           </View>
-
-          <View style={{ paddingHorizontal: 24 }}>
-            <SLabel icon="leaf-outline">{loc.dash_env || 'Environment'}</SLabel>
-          </View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: 24, gap: 8 }}>
-            {VITALS.map((v, i) => (
-              <View key={i} style={{
-                backgroundColor: t.card, borderRadius: 14, paddingVertical: 12, paddingHorizontal: 14,
-                flexDirection: 'row', alignItems: 'center', gap: 10,
-              }}>
-                <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: t.fill, alignItems: 'center', justifyContent: 'center' }}>
-                  <Ionicons name={v.icon} size={16} color={t.sub} />
-                </View>
-                <View>
-                  <Text style={{ color: t.text, fontSize: 15, fontFamily: 'Manrope_700Bold', letterSpacing: -0.3 }}>{v.value}</Text>
-                  <Text style={{ color: t.hint, fontSize: 11, fontFamily: 'Manrope_500Medium', marginTop: 1 }}>{v.label}</Text>
-                </View>
-              </View>
-            ))}
-          </ScrollView>
-
-          {/* ─── Health Status ────────────────────────────────── */}
-          <View style={{ paddingHorizontal: 24, marginTop: 12 }}>
-            <SLabel icon="pulse-outline">{loc.dash_health || 'Health near you'}</SLabel>
-            {DISEASES.map((d, i) => {
-              const on = d.alert;
-              return (
-                <TouchableOpacity key={i} activeOpacity={0.7}
-                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/(tabs)/map'); }}
-                  style={{
-                    flexDirection: 'row', alignItems: 'center', gap: 14,
-                    backgroundColor: on ? t.accentSoft : t.card, borderRadius: 14,
-                    paddingVertical: 14, paddingHorizontal: 16, marginBottom: 8,
-                    borderWidth: 1.5, borderColor: on ? t.accent : 'transparent',
-                  }}>
-                  <View style={{
-                    width: 34, height: 34, borderRadius: 10,
-                    backgroundColor: on ? t.accentMid : t.fill,
-                    alignItems: 'center', justifyContent: 'center',
-                  }}>
-                    <Ionicons name={d.icon} size={16} color={on ? t.accent : t.sub} />
-                  </View>
-                  <Text style={{ flex: 1, color: t.text, fontSize: 16, fontFamily: 'Manrope_600SemiBold', letterSpacing: -0.3 }}>{d.name}</Text>
-                  <Text style={{ color: d.alert ? t.accent : d.warn ? '#C07900' : t.hint, fontSize: 14, fontFamily: d.alert || d.warn ? 'Manrope_700Bold' : 'Manrope_500Medium' }}>{d.status}</Text>
-                </TouchableOpacity>
-              );
-            })}
-            <Text style={{ fontFamily: 'Manrope_400Regular',  color: t.hint, fontSize: 11, marginTop: 4, paddingHorizontal: 4 }}>Based on 47 reports this week</Text>
-          </View>
-
-          {/* ─── Alert ────────────────────────────────────────── */}
-          <View style={{ paddingHorizontal: 24, marginTop: 12 }}>
-            <SLabel icon="warning-outline">{loc.dash_alert || 'Alert'}</SLabel>
-            <TouchableOpacity activeOpacity={0.7}
-              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/alert-detail'); }}
-              style={{
-                flexDirection: 'row', alignItems: 'center', gap: 14,
-                backgroundColor: t.card, borderRadius: 14,
-                paddingVertical: 16, paddingHorizontal: 16,
-              }}>
-              <View style={{ width: 38, height: 38, borderRadius: 11, backgroundColor: '#FFF3E0', alignItems: 'center', justifyContent: 'center' }}>
-                <Ionicons name="warning" size={18} color="#E65100" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 16, color: t.text, fontFamily: 'Manrope_700Bold', letterSpacing: -0.4 }}>Respiratory anomaly in {zip}</Text>
-                <Text style={{ fontSize: 13, color: '#E65100', fontFamily: 'Manrope_500Medium', marginTop: 2 }}>225% above baseline · Accelerating</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={16} color={t.hint} />
-            </TouchableOpacity>
-          </View>
-
-          {/* ─── Forecast ────────────────────────────────────── */}
-          <View style={{ paddingHorizontal: 24, marginTop: 12 }}>
-            <SLabel icon="analytics-outline">{loc.dash_forecast || 'Forecast'}</SLabel>
-            <View style={{ backgroundColor: t.card, borderRadius: 14, padding: 16 }}>
-              <Text style={{ color: t.sub, fontSize: 15, lineHeight: 22, fontFamily: 'Manrope_400Regular', letterSpacing: -0.2 }}>
-                Stomach illness historically rises during finals week. Last year saw a 180% increase.
-              </Text>
-              <Text style={{ color: t.accent, fontSize: 14, fontFamily: 'Manrope_600SemiBold', marginTop: 8 }}>Elevated risk — next 5 days</Text>
-            </View>
-          </View>
-
-          {/* ─── Quick Report ────────────────────────────────── */}
-          <View style={{ paddingHorizontal: 24, marginTop: 12 }}>
-            <SLabel icon="create-outline">{loc.dash_quick || 'Quick report'}</SLabel>
-            <View style={{ flexDirection: 'row', gap: 10 }}>
-              {[
-                { icon: 'camera-outline' as const, label: 'Photo', onPress: async () => {
-                  const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.6 });
-                  if (!r.canceled) router.push('/report-modal');
-                }},
-                { icon: 'mic-outline' as const, label: 'Voice', onPress: () => Alert.alert('Coming Soon', 'Voice reporting is coming soon.') },
-                { icon: 'people-outline' as const, label: 'Family', onPress: () => router.push('/report-modal') },
-              ].map((a, i) => (
-                <TouchableOpacity key={i} activeOpacity={0.7}
-                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); a.onPress(); }}
-                  style={{
-                    flex: 1, backgroundColor: t.card, borderRadius: 14,
-                    paddingVertical: 18, alignItems: 'center', gap: 8,
-                  }}>
-                  <View style={{ width: 38, height: 38, borderRadius: 11, backgroundColor: t.fill, alignItems: 'center', justifyContent: 'center' }}>
-                    <Ionicons name={a.icon} size={18} color={t.sub} />
-                  </View>
-                  <Text style={{ fontSize: 13, color: t.sub, fontFamily: 'Manrope_600SemiBold' }}>{a.label}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-          {/* ─── Your Impact ─────────────────────────────────── */}
-          <View style={{ paddingHorizontal: 24, marginTop: 12 }}>
-            <SLabel icon="trophy-outline">{loc.dash_impact || 'Your impact'}</SLabel>
-            <View style={{ backgroundColor: t.card, borderRadius: 18, paddingVertical: 20, alignItems: 'center' }}>
-              <Text style={{ color: t.hint, fontSize: 11, fontFamily: 'Manrope_700Bold', letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 4 }}>{loc.rep_sub || 'Reports submitted'}</Text>
-              <Text style={{ color: t.text, fontSize: 40, fontFamily: 'Manrope_800ExtraBold', letterSpacing: -1.5 }}>{stats.count || 0}</Text>
-              <Text style={{ color: t.sub, fontSize: 13, fontFamily: 'Manrope_500Medium', marginTop: 4 }}>
-                {stats.streak > 0 ? `${stats.streak} week streak` : 'Start reporting weekly'}
-              </Text>
-            </View>
-          </View>
-
-          {/* ─── Recent ──────────────────────────────────────── */}
-          <View style={{ paddingHorizontal: 24, marginTop: 12 }}>
-            <SLabel icon="time-outline">{loc.dash_recent || 'Recent near you'}</SLabel>
-            {RECENT.map((r, i) => (
-              <View key={i} style={{
-                flexDirection: 'row', alignItems: 'center', gap: 14,
-                backgroundColor: t.card, borderRadius: 14,
-                paddingVertical: 14, paddingHorizontal: 16, marginBottom: 8,
-              }}>
-                <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: t.fill, alignItems: 'center', justifyContent: 'center' }}>
-                  <Ionicons name={r.icon} size={15} color={t.hint} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 15, color: t.text, fontFamily: 'Manrope_600SemiBold', letterSpacing: -0.3 }}>{r.title}</Text>
-                  <Text style={{ fontSize: 12, color: t.hint, fontFamily: 'Manrope_500Medium', marginTop: 2 }}>{r.sub}</Text>
-                </View>
-                <Text style={{ fontFamily: 'Manrope_400Regular',  fontSize: 11, color: t.hint }}>{r.time}</Text>
-              </View>
-            ))}
-            <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/map'); }}
-              style={{ backgroundColor: t.accentSoft, borderRadius: 14, paddingVertical: 14, alignItems: 'center', marginTop: 12 }}>
-              <Text style={{ color: t.accent, fontSize: 13, fontFamily: 'Manrope_500Medium' }}>{loc.see_all || 'See all reports'}</Text>
-            </TouchableOpacity>
-          </View>
-
         </ScrollView>
 
 
@@ -606,7 +668,7 @@ export default function HomeScreen() {
                 Customize the home page
               </Text>
               <Text style={{ color: t.sub, fontSize: 14, lineHeight: 20, fontFamily: 'Manrope_400Regular', textAlign: 'center', marginTop: 8, marginBottom: 18 }}>
-                Add widgets for the map, rewards, and news. Tap here to start editing.
+                Add widgets for health, environment, alerts, map, rewards, and news. Tap here to start editing.
               </Text>
               <View style={{ backgroundColor: t.accent, borderRadius: 14, paddingVertical: 13, paddingHorizontal: 18, width: '100%', alignItems: 'center' }}>
                 <Text style={{ color: '#FFFFFF', fontSize: 15, fontFamily: 'Manrope_700Bold' }}>Start customizing</Text>
@@ -618,37 +680,41 @@ export default function HomeScreen() {
         <Modal visible={showWidgetPicker} transparent animationType="slide">
           <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(17,17,17,0.38)' }}>
             <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => setShowWidgetPicker(false)} />
-            <View style={{ backgroundColor: t.card, borderTopLeftRadius: 26, borderTopRightRadius: 26, paddingHorizontal: 24, paddingTop: 22, paddingBottom: 34 }}>
+            <View style={{ backgroundColor: t.card, borderTopLeftRadius: 26, borderTopRightRadius: 26, paddingHorizontal: 24, paddingTop: 22, paddingBottom: 34, maxHeight: '78%' }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-                <Text style={{ color: t.text, fontSize: 20, fontFamily: 'Manrope_800ExtraBold', letterSpacing: -0.5 }}>Add widgets</Text>
+                <Text style={{ color: t.text, fontSize: 20, fontFamily: 'Manrope_800ExtraBold', letterSpacing: -0.5 }}>Customize widgets</Text>
                 <TouchableOpacity onPress={() => setShowWidgetPicker(false)}
                   style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: t.fill, alignItems: 'center', justifyContent: 'center' }}>
                   <Ionicons name="close" size={17} color={t.sub} />
                 </TouchableOpacity>
               </View>
-              {HOME_WIDGETS.map((widget) => {
-                const added = homeWidgets.includes(widget.id);
-                return (
-                  <TouchableOpacity key={widget.id} activeOpacity={added ? 1 : 0.76}
-                    disabled={added}
-                    onPress={() => addHomeWidget(widget.id)}
-                    style={{
-                      flexDirection: 'row', alignItems: 'center', gap: 14,
-                      backgroundColor: added ? t.accentSoft : t.fill,
-                      borderRadius: 16, paddingVertical: 15, paddingHorizontal: 16, marginBottom: 10,
-                      borderWidth: 1.5, borderColor: added ? t.accentMid : 'transparent',
-                    }}>
-                    <View style={{ width: 40, height: 40, borderRadius: 13, backgroundColor: added ? t.accentMid : t.card, alignItems: 'center', justifyContent: 'center' }}>
-                      <Ionicons name={widget.icon} size={19} color={added ? t.accent : t.sub} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ color: t.text, fontSize: 15, fontFamily: 'Manrope_700Bold' }}>{widget.title}</Text>
-                      <Text style={{ color: t.sub, fontSize: 12, fontFamily: 'Manrope_500Medium', marginTop: 2 }}>{widget.sub}</Text>
-                    </View>
-                    <Ionicons name={added ? 'checkmark-circle' : 'add-circle-outline'} size={21} color={added ? t.accent : t.hint} />
-                  </TouchableOpacity>
-                );
-              })}
+              <ScrollView showsVerticalScrollIndicator={false}>
+                {HOME_WIDGETS.map((widget) => {
+                  const added = homeWidgets.includes(widget.id);
+                  return (
+                    <TouchableOpacity key={widget.id} activeOpacity={0.76}
+                      onPress={() => {
+                        if (added) removeHomeWidget(widget.id);
+                        else addHomeWidget(widget.id);
+                      }}
+                      style={{
+                        flexDirection: 'row', alignItems: 'center', gap: 14,
+                        backgroundColor: added ? t.accentSoft : t.fill,
+                        borderRadius: 16, paddingVertical: 15, paddingHorizontal: 16, marginBottom: 10,
+                        borderWidth: 1.5, borderColor: added ? t.accentMid : 'transparent',
+                      }}>
+                      <View style={{ width: 40, height: 40, borderRadius: 13, backgroundColor: added ? t.accentMid : t.card, alignItems: 'center', justifyContent: 'center' }}>
+                        <Ionicons name={widget.icon} size={19} color={added ? t.accent : t.sub} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ color: t.text, fontSize: 15, fontFamily: 'Manrope_700Bold' }}>{widget.title}</Text>
+                        <Text style={{ color: t.sub, fontSize: 12, fontFamily: 'Manrope_500Medium', marginTop: 2 }}>{widget.sub}</Text>
+                      </View>
+                      <Ionicons name={added ? 'remove-circle-outline' : 'add-circle-outline'} size={21} color={added ? '#E65100' : t.hint} />
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
             </View>
           </View>
         </Modal>

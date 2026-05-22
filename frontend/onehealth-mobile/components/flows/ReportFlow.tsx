@@ -94,6 +94,21 @@ const inferIncidentDate = (text: string) => {
 
 const inferFirstNumber = (text: string) => text.match(/\b\d+\b/)?.[0] || '';
 
+const inferZipCode = (text: string) => text.match(/\b\d{5}\b/)?.[0] || '';
+
+const inferPeopleCount = (text: string) => {
+  const normalized = text.toLowerCase();
+  const direct = normalized.match(/\b(\d{1,3})\s+(people|persons|kids|children|students|coworkers|family members|relatives)\b/);
+  if (direct) return direct[1];
+
+  const words: Record<string, string> = { one: '1', two: '2', three: '3', four: '4', five: '5', six: '6', seven: '7', eight: '8', nine: '9', ten: '10' };
+  const wordMatch = normalized.match(/\b(one|two|three|four|five|six|seven|eight|nine|ten)\s+(people|persons|kids|children|students|coworkers|family members|relatives)\b/);
+  if (wordMatch) return words[wordMatch[1]];
+
+  if (/\b(me and|myself and)\b/.test(normalized)) return '2';
+  return '';
+};
+
 const inferSpecies = (text: string) => {
   const normalized = text.toLowerCase();
   const species = ['dog', 'cat', 'cow', 'cattle', 'horse', 'goat', 'sheep', 'pig', 'chicken', 'duck', 'turkey', 'bird', 'bat', 'deer', 'rabbit', 'mouse', 'rat', 'snake', 'lizard', 'fish'];
@@ -158,6 +173,255 @@ const SYMPTOM_RULES = [
   { id: 'Loss Of Smell Or Taste', terms: ['loss of smell', 'loss of taste', 'cannot smell', 'cannot taste', 'no smell', 'no taste'] },
   { id: 'Yellow Skin/Yellow Eyes', terms: ['yellow skin', 'yellow eyes', 'jaundice'] },
 ];
+
+type ReportHelperAnalysis = {
+  reportingFor?: string;
+  symptoms?: string[];
+  otherSymptomDetails?: string;
+  sickCount?: string;
+  humanLocationZip?: string;
+  onset?: string;
+  absentFromWorkSchool?: string;
+  professionallyDiagnosed?: string;
+  animalTypes?: string[];
+  animalOtherTypeDetails?: string;
+  animalIncidentDetails?: string[];
+  animalOtherIncidentDetails?: string;
+  animalSpecies?: string;
+  animalAffectedCount?: string;
+  animalIncidentDate?: string;
+  animalLocationZip?: string;
+  animalNotes?: string;
+  environmentIncidentDetails?: string[];
+  environmentOtherIncidentDetails?: string;
+  environmentIncidentDate?: string;
+  environmentVectorCount?: string;
+  environmentLocationZip?: string;
+  environmentNotes?: string;
+};
+
+const GEMINI_MODEL = process.env.EXPO_PUBLIC_GEMINI_MODEL || 'gemini-2.5-flash';
+const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
+const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+
+const asArray = (value: unknown) => Array.isArray(value) ? value : value ? [value] : [];
+const optionMap = (options: string[]) => new Map(options.map((option) => [option.toLowerCase(), option]));
+
+const normalizeOptions = (value: unknown, options: string[]) => {
+  const allowed = optionMap(options);
+  return asArray(value)
+    .map((item) => allowed.get(String(item).trim().toLowerCase()))
+    .filter((item): item is string => !!item);
+};
+
+const normalizeYesNo = (value: unknown) => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (['yes', 'true', 'y'].includes(normalized)) return 'Yes';
+  if (['no', 'false', 'n'].includes(normalized)) return 'No';
+  return '';
+};
+
+const normalizeDateString = (value: unknown) => {
+  const parsed = parseCalendarDate(String(value || ''));
+  return parsed ? formatCalendarDate(parsed) : '';
+};
+
+const normalizeDigits = (value: unknown, maxLength = 5) => String(value || '').replace(/\D/g, '').slice(0, maxLength);
+
+const stripJsonFence = (value: string) => value.replace(/^```(?:json)?/i, '').replace(/```$/i, '').trim();
+
+const parseGeminiJson = (value: string): ReportHelperAnalysis => {
+  const clean = stripJsonFence(value);
+  try {
+    return JSON.parse(clean);
+  } catch {
+    const match = clean.match(/\{[\s\S]*\}/);
+    return match ? JSON.parse(match[0]) : {};
+  }
+};
+
+const buildLocalVoiceAnalysis = (text: string, target: VoiceTarget): ReportHelperAnalysis => {
+  const cleanText = text.trim();
+  const normalized = cleanText.toLowerCase();
+  const guessedDate = inferIncidentDate(cleanText);
+  const guessedNumber = inferFirstNumber(cleanText);
+
+  if (target === 'symptoms') {
+    const matches = SYMPTOM_RULES
+      .filter(({ terms }) => terms.some((term) => normalized.includes(term)))
+      .map(({ id }) => id);
+
+    const reportingFor = /\b(my|mom|mother|dad|father|son|daughter|child|kid|wife|husband|partner|friend|roommate|coworker|neighbor|someone)\b/.test(normalized)
+      ? 'Someone else'
+      : /\b(i|i'm|im|me|myself)\b/.test(normalized) ? 'Myself' : '';
+
+    return {
+      symptoms: matches.length > 0 ? matches : ['Other'],
+      otherSymptomDetails: matches.length > 0 ? '' : cleanText,
+      reportingFor,
+      sickCount: inferPeopleCount(cleanText),
+      humanLocationZip: inferZipCode(cleanText),
+      onset: inferIncidentDate(cleanText) ? '' : ['Today', 'Yesterday', 'This week', 'Last week'].find((item) => normalized.includes(item.toLowerCase())) || '',
+      absentFromWorkSchool: /\b(absent|missed|stayed home|out from|didn't go|did not go)\b.*\b(work|school|class)\b/.test(normalized) ? 'Yes' : '',
+    };
+  }
+
+  if (target === 'animals') {
+    const matchedTypes = ANIMAL_TYPES
+      .filter(({ terms }) => terms.some((term) => normalized.includes(term)))
+      .map(({ id }) => id);
+    const guessedSpecies = inferSpecies(cleanText);
+    const incidentMatches: string[] = [];
+    if (normalized.includes('sudden') || normalized.includes('suddenly') || normalized.includes('sick') || normalized.includes('ill')) incidentMatches.push('Sudden sickness');
+    if (normalized.includes('dead') || normalized.includes('found dead') || normalized.includes('died')) incidentMatches.push('Found dead');
+    if (normalized.includes('strange') || normalized.includes('weird') || normalized.includes('unusual behavior') || normalized.includes('acting unusual') || normalized.includes('staggering')) {
+      incidentMatches.push('Unusual behavior');
+    }
+
+    return {
+      animalTypes: matchedTypes,
+      animalIncidentDetails: incidentMatches.length > 0 ? incidentMatches : ['Other'],
+      animalOtherIncidentDetails: incidentMatches.length > 0 ? '' : cleanText,
+      animalIncidentDate: guessedDate,
+      animalAffectedCount: guessedNumber,
+      animalSpecies: guessedSpecies,
+      animalNotes: cleanText,
+    };
+  }
+
+  const environmentMatches: string[] = [];
+  if (normalized.includes('mosquito') || normalized.includes('tick') || normalized.includes('flea') || normalized.includes('vector')) {
+    environmentMatches.push('Vector spotting');
+  }
+  if (normalized.includes('flood') || normalized.includes('standing water')) {
+    environmentMatches.push('Water flooding');
+  }
+  if (normalized.includes('contamination') || normalized.includes('contaminated') || normalized.includes('sewage') || normalized.includes('dirty water')) {
+    environmentMatches.push('Water contamination');
+  }
+
+  return {
+    environmentIncidentDetails: environmentMatches.length > 0 ? environmentMatches : ['Other'],
+    environmentOtherIncidentDetails: environmentMatches.length > 0 ? '' : cleanText,
+    environmentIncidentDate: guessedDate,
+    environmentVectorCount: guessedNumber,
+    environmentNotes: cleanText,
+  };
+};
+
+const buildGeminiPrompt = (target: VoiceTarget, transcript: string) => `
+You are an extraction helper for a One Health reporting app.
+Analyze the transcript and return JSON only. Do not include markdown.
+Use only the allowed option strings. Leave unknown fields empty.
+Current date: ${new Date().toISOString().slice(0, 10)}.
+
+Allowed human symptoms: ${SYMPTOMS.map((item) => item.id).join(', ')}
+Allowed reportingFor values: Myself, Someone else
+Allowed onset values: ${ONSET.join(', ')}
+Allowed animal types: ${ANIMAL_TYPES.map((item) => item.id).join(', ')}
+Allowed animal incident details: Sudden sickness, Found dead, Unusual behavior, Other
+Allowed environmental incident details: Water flooding, Water contamination, Vector spotting, Other
+Yes/no fields must be "Yes", "No", or "".
+Dates must be MM/DD/YYYY.
+Counts and ZIP codes must be digits only.
+
+Target: ${target}
+Transcript: ${JSON.stringify(transcript)}
+
+Return this JSON shape:
+{
+  "reportingFor": "",
+  "symptoms": [],
+  "otherSymptomDetails": "",
+  "sickCount": "",
+  "humanLocationZip": "",
+  "onset": "",
+  "absentFromWorkSchool": "",
+  "professionallyDiagnosed": "",
+  "animalTypes": [],
+  "animalOtherTypeDetails": "",
+  "animalIncidentDetails": [],
+  "animalOtherIncidentDetails": "",
+  "animalSpecies": "",
+  "animalAffectedCount": "",
+  "animalIncidentDate": "",
+  "animalLocationZip": "",
+  "animalNotes": "",
+  "environmentIncidentDetails": [],
+  "environmentOtherIncidentDetails": "",
+  "environmentIncidentDate": "",
+  "environmentVectorCount": "",
+  "environmentLocationZip": "",
+  "environmentNotes": ""
+}`;
+
+const mergeAnalysisWithFallback = (gemini: ReportHelperAnalysis, fallback: ReportHelperAnalysis, target: VoiceTarget): ReportHelperAnalysis => {
+  if (target === 'symptoms') {
+    return {
+      reportingFor: gemini.reportingFor || fallback.reportingFor,
+      symptoms: asArray(gemini.symptoms).length > 0 ? gemini.symptoms : fallback.symptoms,
+      otherSymptomDetails: gemini.otherSymptomDetails || fallback.otherSymptomDetails,
+      sickCount: gemini.sickCount || fallback.sickCount,
+      humanLocationZip: gemini.humanLocationZip || fallback.humanLocationZip,
+      onset: gemini.onset || fallback.onset,
+      absentFromWorkSchool: gemini.absentFromWorkSchool || fallback.absentFromWorkSchool,
+      professionallyDiagnosed: gemini.professionallyDiagnosed || fallback.professionallyDiagnosed,
+    };
+  }
+
+  if (target === 'animals') {
+    return {
+      animalTypes: asArray(gemini.animalTypes).length > 0 ? gemini.animalTypes : fallback.animalTypes,
+      animalOtherTypeDetails: gemini.animalOtherTypeDetails || fallback.animalOtherTypeDetails,
+      animalIncidentDetails: asArray(gemini.animalIncidentDetails).length > 0 ? gemini.animalIncidentDetails : fallback.animalIncidentDetails,
+      animalOtherIncidentDetails: gemini.animalOtherIncidentDetails || fallback.animalOtherIncidentDetails,
+      animalSpecies: gemini.animalSpecies || fallback.animalSpecies,
+      animalAffectedCount: gemini.animalAffectedCount || fallback.animalAffectedCount,
+      animalIncidentDate: gemini.animalIncidentDate || fallback.animalIncidentDate,
+      animalLocationZip: gemini.animalLocationZip || fallback.animalLocationZip,
+      animalNotes: gemini.animalNotes || fallback.animalNotes,
+    };
+  }
+
+  return {
+    environmentIncidentDetails: asArray(gemini.environmentIncidentDetails).length > 0 ? gemini.environmentIncidentDetails : fallback.environmentIncidentDetails,
+    environmentOtherIncidentDetails: gemini.environmentOtherIncidentDetails || fallback.environmentOtherIncidentDetails,
+    environmentIncidentDate: gemini.environmentIncidentDate || fallback.environmentIncidentDate,
+    environmentVectorCount: gemini.environmentVectorCount || fallback.environmentVectorCount,
+    environmentLocationZip: gemini.environmentLocationZip || fallback.environmentLocationZip,
+    environmentNotes: gemini.environmentNotes || fallback.environmentNotes,
+  };
+};
+
+const analyzeReportWithGemini = async (target: VoiceTarget, transcript: string) => {
+  const fallback = buildLocalVoiceAnalysis(transcript, target);
+  if (!GEMINI_API_KEY) return fallback;
+
+  try {
+    const response = await fetch(`${GEMINI_ENDPOINT}?key=${encodeURIComponent(GEMINI_API_KEY)}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: buildGeminiPrompt(target, transcript) }] }],
+        generationConfig: {
+          temperature: 0.1,
+          responseMimeType: 'application/json',
+        },
+      }),
+    });
+
+    if (!response.ok) throw new Error(`Gemini request failed: ${response.status}`);
+
+    const data = await response.json();
+    const text = data?.candidates?.[0]?.content?.parts?.map((part: any) => part.text || '').join('\n') || '';
+    const geminiAnalysis = parseGeminiJson(text);
+    return mergeAnalysisWithFallback(geminiAnalysis, fallback, target);
+  } catch {
+    return fallback;
+  }
+};
 
 const I18N = {
   EN: {
@@ -323,11 +587,13 @@ export default function ReportFlow({ onSignUp, onReportSubmitted, onReturnHome, 
   const [animalSpecies, setAnimalSpecies] = useState('');
   const [animalAffectedCount, setAnimalAffectedCount] = useState('1');
   const [animalPhoto, setAnimalPhoto] = useState<string | null>(null);
+  const [animalOtherTypeDetails, setAnimalOtherTypeDetails] = useState('');
   const [animalOtherIncidentDetails, setAnimalOtherIncidentDetails] = useState('');
   const [environmentIncidentDate, setEnvironmentIncidentDate] = useState('');
   const [environmentZip, setEnvironmentZip] = useState('');
   const [environmentVectorDensity, setEnvironmentVectorDensity] = useState('');
   const [environmentPhoto, setEnvironmentPhoto] = useState<string | null>(null);
+  const [environmentOtherIncidentDetails, setEnvironmentOtherIncidentDetails] = useState('');
   const [animalNotes, setAnimalNotes] = useState('');
   const [environmentNotes, setEnvironmentNotes] = useState('');
   const [voiceText, setVoiceText] = useState('');
@@ -399,11 +665,29 @@ export default function ReportFlow({ onSignUp, onReportSubmitted, onReturnHome, 
     set((p: string[]) => p.includes(v) ? p.filter((x: string) => x !== v) : [...p, v]);
   };
 
+  const toggleAnimalType = (value: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setAnimalTypes((prev) => {
+      const next = prev.includes(value) ? prev.filter((item) => item !== value) : [...prev, value];
+      if (value === 'Other' && !next.includes('Other')) setAnimalOtherTypeDetails('');
+      return next;
+    });
+  };
+
   const toggleAnimalObservation = (value: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setAnimalObservations((prev) => {
       const next = prev.includes(value) ? prev.filter((item) => item !== value) : [...prev, value];
       if (value === 'Other' && !next.includes('Other')) setAnimalOtherIncidentDetails('');
+      return next;
+    });
+  };
+
+  const toggleEnvironmentObservation = (value: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setEnvironmentObservations((prev) => {
+      const next = prev.includes(value) ? prev.filter((item) => item !== value) : [...prev, value];
+      if (value === 'Other' && !next.includes('Other')) setEnvironmentOtherIncidentDetails('');
       return next;
     });
   };
@@ -457,6 +741,7 @@ export default function ReportFlow({ onSignUp, onReportSubmitted, onReturnHome, 
       } : {}),
       ...(usesAnimalFlow ? {
         animal_types: animalTypes,
+        animal_other_type_details: animalTypes.includes('Other') ? animalOtherTypeDetails || null : null,
         animal_incident_date: animalIncidentDate || null,
         animal_location_zip: animalZip,
         animal_species: animalSpecies || null,
@@ -474,6 +759,7 @@ export default function ReportFlow({ onSignUp, onReportSubmitted, onReturnHome, 
         flooding: hasEnvironmentIncident('Water flooding') ? true : null,
         water_contamination: hasEnvironmentIncident('Water contamination') ? true : null,
         environment_observations: environmentObservationIds,
+        environment_other_incident_details: environmentObservations.includes('Other') ? environmentOtherIncidentDetails || null : null,
         environment_notes: environmentNotes || null,
         environment_photo_uri: environmentPhoto,
       } : {}),
@@ -488,10 +774,10 @@ export default function ReportFlow({ onSignUp, onReportSubmitted, onReturnHome, 
     setZip(''); setOnset(''); setDiagnosed('');
     setAbsentFromWorkSchool(''); setAnimalObservations([]); setEnvironmentObservations([]);
     setAnimalTypes([]); setAnimalIncidentDate(''); setAnimalZip(''); setAnimalSpecies('');
-    setAnimalAffectedCount('1'); setAnimalPhoto(null); setAnimalOtherIncidentDetails('');
+    setAnimalAffectedCount('1'); setAnimalPhoto(null); setAnimalOtherTypeDetails(''); setAnimalOtherIncidentDetails('');
     setEnvironmentIncidentDate(''); setEnvironmentZip('');
     setEnvironmentVectorDensity('');
-    setEnvironmentPhoto(null); setAnimalNotes(''); setEnvironmentNotes('');
+    setEnvironmentPhoto(null); setEnvironmentOtherIncidentDetails(''); setAnimalNotes(''); setEnvironmentNotes('');
     setVoiceText(''); setShowVoiceCapture(null); setListening(false); setAnalyzingSymptoms(false);
     setDatePickerTarget(null);
     setStep(0); fa.setValue(1); sl.setValue(0);
@@ -563,6 +849,7 @@ export default function ReportFlow({ onSignUp, onReportSubmitted, onReturnHome, 
       setAnimalSpecies('');
       setAnimalAffectedCount('1');
       setAnimalPhoto(null);
+      setAnimalOtherTypeDetails('');
       setAnimalOtherIncidentDetails('');
       setAnimalNotes('');
     }
@@ -572,6 +859,7 @@ export default function ReportFlow({ onSignUp, onReportSubmitted, onReturnHome, 
       setEnvironmentZip('');
       setEnvironmentVectorDensity('');
       setEnvironmentPhoto(null);
+      setEnvironmentOtherIncidentDetails('');
       setEnvironmentNotes('');
     }
   };
@@ -612,81 +900,105 @@ export default function ReportFlow({ onSignUp, onReportSubmitted, onReturnHome, 
     setCalendarMonth((current) => new Date(current.getFullYear(), current.getMonth() + delta, 1));
   };
 
-  const applyVoiceText = useCallback((text: string, target: VoiceTarget) => {
+  const applyVoiceAnalysis = useCallback((analysis: ReportHelperAnalysis, target: VoiceTarget, transcript: string) => {
+    if (target === 'symptoms') {
+      const matchedReportSubject = normalizeOptions(analysis.reportingFor, ['Myself', 'Someone else'])[0];
+      if (matchedReportSubject) setReportSubject((prev) => prev || matchedReportSubject);
+
+      const matchedSymptoms = normalizeOptions(analysis.symptoms, SYMPTOMS.map((item) => item.id));
+      if (matchedSymptoms.length > 0) {
+        setSymptoms((prev) => [...prev, ...matchedSymptoms.filter((id) => !prev.includes(id))]);
+      }
+
+      if (analysis.otherSymptomDetails) {
+        setSymptoms((prev) => prev.includes('Other') ? prev : [...prev, 'Other']);
+        setOtherSym(analysis.otherSymptomDetails);
+      } else if (matchedSymptoms.length === 0) {
+        setSymptoms((prev) => prev.includes('Other') ? prev : [...prev, 'Other']);
+        setOtherSym(transcript);
+      }
+
+      const matchedOnset = normalizeOptions(analysis.onset, ONSET)[0];
+      if (matchedOnset) setOnset((prev) => prev || matchedOnset);
+
+      const nextSickCount = normalizeDigits(analysis.sickCount, 3);
+      if (nextSickCount) setSickCount(nextSickCount);
+
+      const humanZipCode = normalizeDigits(analysis.humanLocationZip, 5);
+      if (humanZipCode.length === 5) setZip((prev) => prev || humanZipCode);
+
+      const absent = normalizeYesNo(analysis.absentFromWorkSchool);
+      if (absent) setAbsentFromWorkSchool((prev) => prev || absent);
+
+      const diagnosedByProfessional = normalizeYesNo(analysis.professionallyDiagnosed);
+      if (diagnosedByProfessional) setDiagnosed((prev) => prev || diagnosedByProfessional);
+    }
+
+    if (target === 'animals') {
+      const matchedTypes = normalizeOptions(analysis.animalTypes, ANIMAL_TYPES.map((item) => item.id));
+      if (matchedTypes.length > 0) {
+        setAnimalTypes((prev) => [...prev, ...matchedTypes.filter((id) => !prev.includes(id))]);
+      }
+      if (matchedTypes.includes('Other') && analysis.animalOtherTypeDetails) {
+        setAnimalOtherTypeDetails((prev) => prev.trim() ? prev : analysis.animalOtherTypeDetails || '');
+      }
+
+      const matchedIncidents = normalizeOptions(analysis.animalIncidentDetails, animalObservationOptions.map((item) => item.id));
+      if (matchedIncidents.length > 0) {
+        setAnimalObservations((prev) => [...prev, ...matchedIncidents.filter((id) => !prev.includes(id))]);
+      }
+      if (matchedIncidents.includes('Other') && analysis.animalOtherIncidentDetails) {
+        setAnimalOtherIncidentDetails((prev) => prev.trim() ? prev : analysis.animalOtherIncidentDetails || '');
+      }
+
+      const incidentDate = normalizeDateString(analysis.animalIncidentDate);
+      if (incidentDate) setAnimalIncidentDate((prev) => prev || incidentDate);
+
+      const affectedCount = normalizeDigits(analysis.animalAffectedCount, 3);
+      if (affectedCount) setAnimalAffectedCount(affectedCount);
+
+      const animalZipCode = normalizeDigits(analysis.animalLocationZip, 5);
+      if (animalZipCode.length === 5) setAnimalZip((prev) => prev || animalZipCode);
+
+      if (analysis.animalSpecies) setAnimalSpecies((prev) => prev.trim() ? prev : String(analysis.animalSpecies));
+      setAnimalNotes((prev) => appendReportNote(prev, analysis.animalNotes || transcript));
+    }
+
+    if (target === 'environment') {
+      const matchedIncidents = normalizeOptions(analysis.environmentIncidentDetails, environmentObservationOptions.map((item) => item.id));
+      if (matchedIncidents.length > 0) {
+        setEnvironmentObservations((prev) => [...prev, ...matchedIncidents.filter((id) => !prev.includes(id))]);
+      }
+      if (matchedIncidents.includes('Other') && analysis.environmentOtherIncidentDetails) {
+        setEnvironmentOtherIncidentDetails((prev) => prev.trim() ? prev : analysis.environmentOtherIncidentDetails || '');
+      }
+
+      const incidentDate = normalizeDateString(analysis.environmentIncidentDate);
+      if (incidentDate) setEnvironmentIncidentDate((prev) => prev || incidentDate);
+
+      const vectorCount = normalizeDigits(analysis.environmentVectorCount, 5);
+      if (vectorCount) setEnvironmentVectorDensity((prev) => prev || vectorCount);
+
+      const environmentZipCode = normalizeDigits(analysis.environmentLocationZip, 5);
+      if (environmentZipCode.length === 5) setEnvironmentZip((prev) => prev || environmentZipCode);
+
+      setEnvironmentNotes((prev) => appendReportNote(prev, analysis.environmentNotes || transcript));
+    }
+  }, [animalObservationOptions, environmentObservationOptions]);
+
+  const applyVoiceText = useCallback(async (text: string, target: VoiceTarget) => {
     const cleanText = text.trim();
     if (!cleanText) return;
 
     setAnalyzingSymptoms(true);
-    setTimeout(() => {
-      const normalized = cleanText.toLowerCase();
-      const guessedDate = inferIncidentDate(cleanText);
-      const guessedNumber = inferFirstNumber(cleanText);
-
-      if (target === 'symptoms') {
-        const matches = SYMPTOM_RULES
-          .filter(({ terms }) => terms.some((term) => normalized.includes(term)))
-          .map(({ id }) => id);
-
-        if (matches.length > 0) {
-          setSymptoms((prev) => [...prev, ...matches.filter((id) => !prev.includes(id))]);
-        } else {
-          setSymptoms((prev) => prev.includes('Other') ? prev : [...prev, 'Other']);
-          setOtherSym(cleanText);
-        }
-      }
-
-      if (target === 'animals') {
-        const matchedTypes = ANIMAL_TYPES
-          .filter(({ terms }) => terms.some((term) => normalized.includes(term)))
-          .map(({ id }) => id);
-        const guessedSpecies = inferSpecies(cleanText);
-
-        if (matchedTypes.length > 0) {
-          setAnimalTypes((prev) => [...prev, ...matchedTypes.filter((id) => !prev.includes(id))]);
-        }
-        if (guessedDate) setAnimalIncidentDate((prev) => prev || guessedDate);
-        if (guessedNumber) setAnimalAffectedCount(guessedNumber);
-        if (guessedSpecies) setAnimalSpecies((prev) => prev.trim() ? prev : guessedSpecies);
-        const incidentMatches: string[] = [];
-        if (normalized.includes('sudden') || normalized.includes('suddenly') || normalized.includes('sick') || normalized.includes('ill')) incidentMatches.push('Sudden sickness');
-        if (normalized.includes('dead') || normalized.includes('found dead') || normalized.includes('died')) incidentMatches.push('Found dead');
-        if (normalized.includes('strange') || normalized.includes('weird') || normalized.includes('unusual behavior') || normalized.includes('acting unusual') || normalized.includes('staggering')) {
-          incidentMatches.push('Unusual behavior');
-        }
-        if (incidentMatches.length > 0) {
-          setAnimalObservations((prev) => [...prev, ...incidentMatches.filter((id) => !prev.includes(id))]);
-        } else {
-          setAnimalObservations((prev) => prev.includes('Other') ? prev : [...prev, 'Other']);
-          setAnimalOtherIncidentDetails((prev) => prev.trim() ? prev : cleanText);
-        }
-        setAnimalNotes((prev) => appendReportNote(prev, cleanText));
-      }
-
-      if (target === 'environment') {
-        if (guessedDate) setEnvironmentIncidentDate((prev) => prev || guessedDate);
-        if (guessedNumber) setEnvironmentVectorDensity((prev) => prev || guessedNumber);
-        const environmentMatches: string[] = [];
-        if (normalized.includes('mosquito') || normalized.includes('tick') || normalized.includes('flea') || normalized.includes('vector')) {
-          environmentMatches.push('Vector spotting');
-        }
-        if (normalized.includes('flood') || normalized.includes('standing water')) {
-          environmentMatches.push('Water flooding');
-        }
-        if (normalized.includes('contamination') || normalized.includes('contaminated') || normalized.includes('sewage') || normalized.includes('dirty water')) {
-          environmentMatches.push('Water contamination');
-        }
-        if (environmentMatches.length > 0) {
-          setEnvironmentObservations((prev) => [...prev, ...environmentMatches.filter((id) => !prev.includes(id))]);
-        } else {
-          setEnvironmentObservations((prev) => prev.includes('Other') ? prev : [...prev, 'Other']);
-        }
-        setEnvironmentNotes((prev) => appendReportNote(prev, cleanText));
-      }
-
+    try {
+      const analysis = await analyzeReportWithGemini(target, cleanText);
+      applyVoiceAnalysis(analysis, target, cleanText);
+    } finally {
       setAnalyzingSymptoms(false);
       setShowVoiceCapture(null);
-    }, 650);
-  }, []);
+    }
+  }, [applyVoiceAnalysis]);
 
   const startVoiceListening = (target: VoiceTarget) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -1097,7 +1409,7 @@ export default function ReportFlow({ onSignUp, onReportSubmitted, onReturnHome, 
                 <TouchableOpacity
                   key={type.id}
                   activeOpacity={0.74}
-                  onPress={() => togArr(animalTypes, setAnimalTypes, type.id)}
+                  onPress={() => toggleAnimalType(type.id)}
                   style={{
                     alignItems: 'center',
                     width: '31%',
@@ -1143,6 +1455,16 @@ export default function ReportFlow({ onSignUp, onReportSubmitted, onReturnHome, 
               );
             })}
           </View>
+
+          {animalTypes.includes('Other') && (
+            <TextInput style={{
+              backgroundColor: t.card, borderRadius: 12, color: t.text, fontSize: 15,
+              paddingHorizontal: 16, paddingVertical: 12, minHeight: compactPhone ? 54 : 62,
+              textAlignVertical: 'top', fontFamily: 'Manrope_500Medium',
+              borderWidth: 1.5, borderColor: t.line, marginTop: 10,
+            }} placeholder="Specify animal type..." placeholderTextColor={t.hint}
+              value={animalOtherTypeDetails} onChangeText={setAnimalOtherTypeDetails} multiline />
+          )}
 
           <Label icon="alert-circle-outline">Incident details</Label>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
@@ -1219,12 +1541,24 @@ export default function ReportFlow({ onSignUp, onReportSubmitted, onReturnHome, 
         <Heading>Environment report</Heading>
         <Sub>Report environmental conditions that may affect community health.</Sub>
 
+        {renderVoiceHelper('environment', 'Describe the environment report', 'Hold to talk and AI will fill matching details.')}
+
         <Label icon="leaf-outline">Environmental incident</Label>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
           {environmentObservationOptions.map(o => (
-            <Chip key={o.id} label={(loc.obs as any)[o.id] || o.id} icon={o.icon} on={environmentObservations.includes(o.id)} onP={() => togArr(environmentObservations, setEnvironmentObservations, o.id)} />
+            <Chip key={o.id} label={(loc.obs as any)[o.id] || o.id} icon={o.icon} on={environmentObservations.includes(o.id)} onP={() => toggleEnvironmentObservation(o.id)} />
           ))}
         </View>
+
+        {environmentObservations.includes('Other') && (
+          <TextInput style={{
+            backgroundColor: t.card, borderRadius: 12, color: t.text, fontSize: 15,
+            paddingHorizontal: 16, paddingVertical: 12, minHeight: compactPhone ? 58 : 66,
+            textAlignVertical: 'top', fontFamily: 'Manrope_500Medium',
+            borderWidth: 1.5, borderColor: t.line,
+          }} placeholder="Add more details about the environmental incident..." placeholderTextColor={t.hint}
+            value={environmentOtherIncidentDetails} onChangeText={setEnvironmentOtherIncidentDetails} multiline />
+        )}
 
         <Label icon="calendar-outline">Date of incident</Label>
         {renderDateInput(environmentIncidentDate, 'environment')}
@@ -1249,7 +1583,6 @@ export default function ReportFlow({ onSignUp, onReportSubmitted, onReturnHome, 
           paddingHorizontal: 16, paddingVertical: 12, minHeight: compactPhone ? 64 : 78, textAlignVertical: 'top',
         }} placeholder={loc.any_det} placeholderTextColor={t.hint}
           value={environmentNotes} onChangeText={setEnvironmentNotes} multiline />
-        {renderVoiceHelper('environment', 'Describe the environment report', 'Hold to talk and AI will fill matching details.')}
       </ScrollView>
     );
   };
