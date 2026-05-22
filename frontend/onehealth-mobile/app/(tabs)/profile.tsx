@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { router, useFocusEffect } from 'expo-router';
-import { getMyReports, getNotifsOn, setNotifsOn, SavedReport, getThemeMode, setThemeMode, getLocalProfile, clearLocalProfile } from '@/utils/storage';
+import { getNotifsOn, setNotifsOn, getThemeMode, setThemeMode, getLocalProfile, clearLocalProfile } from '@/utils/storage';
 import { useLang, updateLang } from '@/utils/i18n';
 import * as api from '@/utils/api';
 
@@ -29,7 +29,6 @@ const cap = (s: string | null) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : 
 
 export default function ProfileScreen() {
   const [profile, setProfile] = useState<ProfileState>(EMPTY);
-  const [reports, setReports] = useState<SavedReport[]>([]);
   const [notifsOn, setNotifsState] = useState(true);
   const { lang, loc } = useLang();
   const [theme, setThemeState] = useState('light');
@@ -64,7 +63,6 @@ export default function ProfileScreen() {
       household: local.household || null,
       zip: local.zip || null,
     });
-    setReports(await getMyReports());
     setNotifsState(await getNotifsOn());
     setThemeState(await getThemeMode());
   }, []);
@@ -127,9 +125,6 @@ export default function ProfileScreen() {
     </TouchableOpacity>
   );
 
-  const catIcon = (cats: string[]): keyof typeof Ionicons.glyphMap =>
-    cats?.includes('animals') ? 'paw-outline' : cats?.includes('environment') ? 'leaf-outline' : 'person-outline';
-
   return (
     <View style={{ flex: 1, backgroundColor: t.bg }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
@@ -178,36 +173,6 @@ export default function ProfileScreen() {
               <Row icon="people-outline" label="Household" right={profile.household || 'Add'} onPress={editProfile} />
               <Row icon="navigate-outline" label="Zip Code" right={profile.zip || 'Add'} onPress={editProfile} />
             </>
-          )}
-
-          {/* Recent Reports */}
-          <SLabel icon="time-outline">{loc.p_rec}</SLabel>
-          {reports.length === 0 ? (
-            <View style={{ backgroundColor: t.card, borderRadius: 14, padding: 20, alignItems: 'center' }}>
-              <Ionicons name="document-outline" size={22} color={t.hint} />
-              <Text style={{ fontFamily: 'Manrope_400Regular',  color: t.hint, fontSize: 13, marginTop: 6 }}>{loc.p_no_rep}</Text>
-            </View>
-          ) : (
-            reports.slice(0, 3).map((r, i) => (
-              <View key={i} style={{
-                flexDirection: 'row', alignItems: 'center', gap: 14,
-                backgroundColor: t.card, borderRadius: 14,
-                paddingVertical: 14, paddingHorizontal: 16, marginBottom: 8,
-              }}>
-                <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: t.fill, alignItems: 'center', justifyContent: 'center' }}>
-                  <Ionicons name={catIcon(r.category)} size={14} color={t.hint} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 14, color: t.text, fontFamily: 'Manrope_500Medium' }}>
-                    {r.symptoms?.slice(0, 2).join(', ') || r.observations?.slice(0, 2).join(', ') || r.feeling}
-                  </Text>
-                  <Text style={{ fontFamily: 'Manrope_400Regular',  fontSize: 11, color: t.hint, marginTop: 2 }}>{r.date}</Text>
-                </View>
-                <View style={{ backgroundColor: t.accentSoft, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1.5, borderColor: t.accent }}>
-                  <Text style={{ color: t.accent, fontSize: 10, fontFamily: 'Manrope_600SemiBold' }}>{loc.p_sent}</Text>
-                </View>
-              </View>
-            ))
           )}
 
           {/* Settings */}
