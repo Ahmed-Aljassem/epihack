@@ -23,7 +23,18 @@
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/favicon.png",
+      "name": "OneHealth Arizona",
+      "shortName": "OneHealth",
+      "lang": "en",
+      "scope": "/",
+      "themeColor": "#0B6623",
+      "description": "Community-powered One Health reporting for Arizona.",
+      "display": "standalone",
+      "startUrl": "/",
+      "orientation": "portrait-primary",
+      "backgroundColor": "#FAFAFA",
+      "barStyle": "black-translucent"
     },
     "plugins": [
       "expo-router",
