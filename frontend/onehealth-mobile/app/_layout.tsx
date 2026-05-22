@@ -50,6 +50,7 @@ export default function RootLayout() {
         <Stack.Screen name="post-detail" options={{ presentation: 'card', animation: 'slide_from_right' }} />
         <Stack.Screen name="compose" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
         <Stack.Screen name="auth-modal" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="profile-setup" options={{ presentation: 'card', animation: 'slide_from_right' }} />
       </Stack>
     </>
   );

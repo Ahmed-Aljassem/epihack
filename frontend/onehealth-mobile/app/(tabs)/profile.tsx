@@ -1,12 +1,12 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Switch, ActionSheetIOS, Alert, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { router } from 'expo-router';
-import { getUserProfile, getReportStats, getMyReports, clearAuth, getNotifsOn, setNotifsOn, SavedReport, getLang, setLang, getThemeMode, setThemeMode } from '@/utils/storage';
+import { router, useFocusEffect } from 'expo-router';
+import { getMyReports, getNotifsOn, setNotifsOn, SavedReport, getThemeMode, setThemeMode, getLocalProfile, clearLocalProfile } from '@/utils/storage';
 import { useLang, updateLang } from '@/utils/i18n';
-import { supabase } from '@/utils/supabase';
+import * as api from '@/utils/api';
 
 const t = {
   bg: '#FAFAFA', card: '#FFFFFF', text: '#111', sub: '#888',
@@ -17,73 +17,64 @@ const t = {
 const LANG_MAP: Record<string, string> = { EN: 'English', ES: 'Español', TO: "O'odham ñiok" };
 const THEME_MAP: Record<string, string> = { light: 'Light', dark: 'Dark', auto: 'Auto' };
 
+interface ProfileState {
+  loggedIn: boolean;
+  name: string | null; email: string | null;
+  phone: string | null; age: string | null; sex: string | null;
+  occupation: string | null; household: string | null; zip: string | null;
+}
+const EMPTY: ProfileState = { loggedIn: false, name: null, email: null, phone: null, age: null, sex: null, occupation: null, household: null, zip: null };
+
+const cap = (s: string | null) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : null);
+
 export default function ProfileScreen() {
-  const [profile, setProfile] = useState<{ name: string | null; email: string | null; token: string | null; phone: string | null; age: string | null; profession: string | null; pets: string | null }>({ name: null, email: null, token: null, phone: null, age: null, profession: null, pets: null });
-  const [stats, setStats] = useState({ count: 0, streak: 0 });
+  const [profile, setProfile] = useState<ProfileState>(EMPTY);
   const [reports, setReports] = useState<SavedReport[]>([]);
   const [notifsOn, setNotifsState] = useState(true);
   const { lang, loc } = useLang();
   const [theme, setThemeState] = useState('light');
 
   const load = useCallback(async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session) {
-      const meta = session.user.user_metadata || {};
-      setProfile({
-        name: meta.full_name || 'Reporter',
-        email: session.user.email || null,
-        token: session.access_token,
-        phone: meta.phone_number || null,
-        age: meta.age || null,
-        profession: meta.profession || null,
-        pets: meta.pets || null,
-      });
-    } else {
-      setProfile({ name: null, email: null, token: null, phone: null, age: null, profession: null, pets: null });
+    const loggedIn = await api.isLoggedIn();
+    const local = await getLocalProfile();
+    let name = local.name || null;
+    let email = local.email || null;
+
+    if (loggedIn) {
+      // Pull the latest identity claims; tolerate unknown response shapes.
+      try {
+        const me: any = await api.getMe();
+        if (me && typeof me === 'object') {
+          name = me.name || me['cognito:username'] || name;
+          email = me.email || email;
+        }
+      } catch (e) {
+        console.log('getMe skipped:', e);
+      }
     }
-    
-    setStats(await getReportStats());
+
+    setProfile({
+      loggedIn,
+      name: loggedIn ? (name || 'Reporter') : null,
+      email,
+      phone: local.phone || null,
+      age: local.age || null,
+      sex: cap(local.sex || null),
+      occupation: local.occupation || null,
+      household: local.household || null,
+      zip: local.zip || null,
+    });
     setReports(await getMyReports());
     setNotifsState(await getNotifsOn());
     setThemeState(await getThemeMode());
   }, []);
 
-  useEffect(() => { 
-    load(); 
-    const { data: authListener } = supabase.auth.onAuthStateChange(() => load());
-    return () => { authListener.subscription.unsubscribe(); };
-  }, [load]);
-  
-  const isLoggedIn = !!profile.token;
+  // Reload whenever the tab is focused (after login, profile-setup, or a report).
+  useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  const editField = (field: string, title: string, placeholder: string, keyboardType: any = 'default') => {
-    Alert.prompt(title, '', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Save', onPress: async (val) => {
-        if (!val) return;
-        try {
-          // 1. Update Auth Metadata (User object)
-          await supabase.auth.updateUser({ data: { [field]: val } });
-          
-          // 2. Add to Supabase Database (profiles table)
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session?.user?.id) {
-            await supabase.from('profiles').upsert({ 
-              id: session.user.id, 
-              [field]: val,
-              updated_at: new Date().toISOString()
-            });
-          }
-          
-          load();
-        } catch (err) {
-          console.log('Error saving to database:', err);
-        }
-      }}
-    ], 'plain-text', '', keyboardType);
-  };
+  const isLoggedIn = profile.loggedIn;
 
-  const pick = (title: string, labels: string[], keys: string[], setter: (k: string) => void, saver: (k: string) => Promise<void>) => {
+  const pick = (title: string, labels: string[], keys: string[], setter: (k: string) => void, saver: (k: string) => Promise<void> | void) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (Platform.OS === 'ios') {
       ActionSheetIOS.showActionSheetWithOptions(
@@ -98,14 +89,17 @@ export default function ProfileScreen() {
     }
   };
 
+  const editProfile = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push('/profile-setup');
+  };
+
   const handleLogout = () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-    // Instantly clear UI state so it feels snappy
-    setProfile({ name: null, email: null, token: null, phone: null, age: null, profession: null, pets: null });
-    
-    // Perform actual sign out operations in the background
-    clearAuth().catch(() => {});
-    supabase.auth.signOut().catch(e => console.log('Sign out error:', e));
+    // Instantly clear UI so it feels snappy; do the network bits in the background.
+    setProfile(EMPTY);
+    api.logout().catch((e) => console.log('logout error:', e));
+    clearLocalProfile().catch(() => {});
   };
 
   const SLabel = ({ children, icon }: { children: string; icon?: keyof typeof Ionicons.glyphMap }) => (
@@ -161,7 +155,7 @@ export default function ProfileScreen() {
               <Text style={{ fontSize: 17, fontFamily: 'Manrope_600SemiBold', color: t.text }}>
                 {isLoggedIn ? (profile.name || 'Reporter') : loc.p_anon}
               </Text>
-              <Text style={{ fontFamily: 'Manrope_400Regular',  fontSize: 12, color: t.sub, marginTop: 2 }}>Tucson, AZ</Text>
+              <Text style={{ fontFamily: 'Manrope_400Regular',  fontSize: 12, color: t.sub, marginTop: 2 }}>{profile.email || 'Tucson, AZ'}</Text>
             </View>
             {!isLoggedIn && (
               <TouchableOpacity activeOpacity={0.8}
@@ -173,14 +167,16 @@ export default function ProfileScreen() {
           </View>
 
 
-          {/* Personal Info */}
+          {/* Personal Info — tap any row to edit the full profile form */}
           {isLoggedIn && (
             <>
               <SLabel icon="person-outline">Personal Info</SLabel>
-              <Row icon="call-outline" label="Phone Number" right={profile.phone || 'Add'} onPress={() => editField('phone_number', 'Phone Number', 'e.g. 555-1234', 'phone-pad')} />
-              <Row icon="calendar-outline" label="Age" right={profile.age || 'Add'} onPress={() => editField('age', 'Age', 'e.g. 35', 'number-pad')} />
-              <Row icon="briefcase-outline" label="Profession" right={profile.profession || 'Add'} onPress={() => editField('profession', 'Profession', 'e.g. Teacher')} />
-              <Row icon="paw-outline" label="Number of Pets" right={profile.pets || 'Add'} onPress={() => editField('pets', 'Number of Pets', 'e.g. 2', 'number-pad')} />
+              <Row icon="call-outline" label="Phone Number" right={profile.phone || 'Add'} onPress={editProfile} />
+              <Row icon="calendar-outline" label="Age" right={profile.age || 'Add'} onPress={editProfile} />
+              <Row icon="male-female-outline" label="Sex" right={profile.sex || 'Add'} onPress={editProfile} />
+              <Row icon="briefcase-outline" label="Occupation" right={profile.occupation || 'Add'} onPress={editProfile} />
+              <Row icon="people-outline" label="Household" right={profile.household || 'Add'} onPress={editProfile} />
+              <Row icon="navigate-outline" label="Zip Code" right={profile.zip || 'Add'} onPress={editProfile} />
             </>
           )}
 
@@ -217,8 +213,8 @@ export default function ProfileScreen() {
           {/* Settings */}
           <SLabel icon="settings-outline">{loc.p_set}</SLabel>
           <Row icon="globe-outline" label={loc.p_lang} right={LANG_MAP[lang] || lang}
-            onPress={() => pick(loc.sel_lang || 'Select Language', ['English', 'Español', "O'odham ñiok"], ['EN', 'ES', 'TO'], updateLang, () => {})} />
-          <Row icon="location-outline" label={loc.p_loc} right="85719" onPress={() => {}} />
+            onPress={() => pick(loc.sel_lang || 'Select Language', ['English', 'Español', "O'odham ñiok"], ['EN', 'ES', 'TO'], (k) => updateLang(k as 'EN' | 'ES' | 'TO'), () => {})} />
+          <Row icon="location-outline" label={loc.p_loc} right={profile.zip || '85719'} onPress={isLoggedIn ? editProfile : undefined} />
 
           {/* Notifications toggle */}
           <View style={{
