@@ -22,6 +22,7 @@ import Map, {
 import { ExternalLink, MapPinned, Locate } from "lucide-react";
 import { CATEGORY_COLORS } from "../../data/reports";
 import { RESOURCE_GROUPS } from "../../data/heatReliefResources";
+import zipBoundaries from "../../data/arizonaZipBoundaries.json";
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
 
@@ -47,6 +48,10 @@ const RESOURCE_CLUSTER_LAYER = "resources-clusters";
 const RESOURCE_CLUSTER_COUNT_LAYER = "resources-cluster-count";
 const RESOURCE_POINT_LAYER = "resources-points";
 const RESOURCE_POINT_LABEL_LAYER = "resources-point-labels";
+const CHOROPLETH_SOURCE_ID = "zip-boundaries-src";
+const CHOROPLETH_FILL_LAYER = "zip-choropleth-fill";
+const CHOROPLETH_LINE_LAYER = "zip-choropleth-line";
+const CHOROPLETH_LABEL_LAYER = "zip-choropleth-labels";
 
 const CLUSTER_LAYER_STYLE = {
   id: CLUSTER_LAYER,
@@ -193,7 +198,93 @@ const RESOURCE_POINT_LABEL_LAYER_STYLE = {
   },
 };
 
+const CHOROPLETH_FILL_STYLE = {
+  id: CHOROPLETH_FILL_LAYER,
+  type: "fill",
+  source: CHOROPLETH_SOURCE_ID,
+  paint: {
+    "fill-color": [
+      "step",
+      ["get", "reportCount"],
+      "rgba(209, 233, 222, 0.25)",  // 0 reports
+      1, "#b2dfdb",                  // 1-2
+      3, "#4db6ac",                  // 3-4
+      5, "#26a69a",                  // 5-9
+      10, "#00897b",                 // 10-19
+      20, "#00695c",                 // 20+
+    ],
+    "fill-opacity": [
+      "interpolate", ["linear"], ["zoom"],
+      4, 0.7,
+      8, 0.55,
+      12, 0.4,
+    ],
+  },
+};
+
+const CHOROPLETH_LINE_STYLE = {
+  id: CHOROPLETH_LINE_LAYER,
+  type: "line",
+  source: CHOROPLETH_SOURCE_ID,
+  paint: {
+    "line-color": "#00796b",
+    "line-width": [
+      "interpolate", ["linear"], ["zoom"],
+      4, 0.4,
+      8, 1,
+      12, 1.5,
+    ],
+    "line-opacity": 0.6,
+  },
+};
+
+const CHOROPLETH_LABEL_STYLE = {
+  id: CHOROPLETH_LABEL_LAYER,
+  type: "symbol",
+  source: CHOROPLETH_SOURCE_ID,
+  filter: [">", ["get", "reportCount"], 0],
+  layout: {
+    "text-field": [
+      "concat",
+      ["get", "ZCTA5CE10"],
+      "\n",
+      ["to-string", ["get", "reportCount"]],
+    ],
+    "text-font": ["DIN Offc Pro Medium", "Arial Unicode MS Bold"],
+    "text-size": ["interpolate", ["linear"], ["zoom"], 5, 9, 10, 12],
+    "text-allow-overlap": false,
+  },
+  paint: {
+    "text-color": "#004d40",
+    "text-halo-color": "rgba(255,255,255,0.85)",
+    "text-halo-width": 1.2,
+  },
+};
+
+function buildChoroplethGeoJSON(reports) {
+  const counts = {};
+  for (const r of reports) {
+    const zip = r.location?.zip || r.zip || "";
+    if (zip) counts[zip] = (counts[zip] || 0) + 1;
+  }
+  return {
+    type: "FeatureCollection",
+    features: zipBoundaries.features.map((f) => ({
+      ...f,
+      properties: {
+        ...f.properties,
+        reportCount: counts[f.properties.ZCTA5CE10] || 0,
+      },
+    })),
+  };
+}
+
 function interactiveLayersForMode(viewMode, showResources) {
+  if (viewMode === "choropleth") {
+    const layers = [CHOROPLETH_FILL_LAYER];
+    if (showResources) layers.push(RESOURCE_CLUSTER_LAYER, RESOURCE_POINT_LAYER);
+    return layers;
+  }
   const layers = viewMode === "heatmap" ? [] : [CLUSTER_LAYER, POINT_LAYER];
   if (showResources) {
     layers.push(RESOURCE_CLUSTER_LAYER, RESOURCE_POINT_LAYER);
@@ -349,8 +440,13 @@ export default function ReportsMap({
     () => resourcesToGeoJSON(resourceMarkers),
     [resourceMarkers],
   );
+  const showChoropleth = showReports && viewMode === "choropleth";
   const showHeatmap = showReports && (viewMode === "heatmap" || viewMode === "both");
   const showPointLayers = showReports && (viewMode === "points" || viewMode === "both");
+  const choroplethGeojson = useMemo(
+    () => (showChoropleth ? buildChoroplethGeoJSON(reports) : null),
+    [reports, showChoropleth],
+  );
   const heatmapLayerStyle = useMemo(
     () => buildHeatmapLayerStyle(showPointLayers),
     [showPointLayers],
@@ -371,6 +467,12 @@ export default function ReportsMap({
       setPopup(null);
     }
   }, [popup?.kind, showResources]);
+
+  useEffect(() => {
+    if (!showChoropleth && popup?.kind === "zip") {
+      setPopup(null);
+    }
+  }, [popup?.kind, showChoropleth]);
 
   // Click handler: zoom into clusters, open popup for points.
   const onClick = useCallback((event) => {
@@ -432,6 +534,18 @@ export default function ReportsMap({
           ...feature.properties,
           color: RESOURCE_GROUPS[feature.properties.group]?.color,
         },
+      });
+      return;
+    }
+
+    if (feature.layer.id === CHOROPLETH_FILL_LAYER) {
+      const { lngLat } = event;
+      setPopup({
+        kind: "zip",
+        longitude: lngLat.lng,
+        latitude: lngLat.lat,
+        zip: feature.properties.ZCTA5CE10,
+        reportCount: feature.properties.reportCount,
       });
     }
   }, [onSelectReport]);
@@ -497,6 +611,18 @@ export default function ReportsMap({
       >
         <NavigationControl position="top-left" showCompass={false} />
         <ScaleControl position="bottom-left" unit="imperial" />
+        {showChoropleth && choroplethGeojson && (
+          <Source
+            id={CHOROPLETH_SOURCE_ID}
+            type="geojson"
+            data={choroplethGeojson}
+          >
+            <Layer {...CHOROPLETH_FILL_STYLE} />
+            <Layer {...CHOROPLETH_LINE_STYLE} />
+            <Layer {...CHOROPLETH_LABEL_STYLE} />
+          </Source>
+        )}
+
         {showHeatmap && (
           <Source
             id={HEATMAP_SOURCE_ID}
@@ -614,6 +740,24 @@ export default function ReportsMap({
               {popup.resource.org && (
                 <div>Org: {popup.resource.org}</div>
               )}
+            </div>
+          </Popup>
+        )}
+
+        {popup?.kind === "zip" && (
+          <Popup
+            longitude={popup.longitude}
+            latitude={popup.latitude}
+            anchor="bottom"
+            offset={6}
+            closeButton
+            closeOnClick={false}
+            onClose={() => setPopup(null)}
+            className="reports-popup"
+          >
+            <div className="reports-popup-title">ZIP {popup.zip}</div>
+            <div className="reports-popup-meta">
+              {popup.reportCount} {popup.reportCount === 1 ? "report" : "reports"}
             </div>
           </Popup>
         )}

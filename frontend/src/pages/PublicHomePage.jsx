@@ -1,3 +1,4 @@
+import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import {
   Shield,
@@ -23,28 +24,63 @@ const PILLAR_ICONS = {
 };
 
 export default function PublicHomePage() {
+  const [titleIndex, setTitleIndex] = useState(0);
+  const [animClass, setAnimClass] = useState("hero-title-visible");
+  const [glowing, setGlowing] = useState(false);
+
+  const cycleTitle = useCallback(() => {
+    setAnimClass("hero-title-out");
+    setTimeout(() => {
+      setTitleIndex((i) => (i + 1) % LANDING_HERO.titles.length);
+      setAnimClass("hero-title-in");
+      setGlowing(true);
+      setTimeout(() => setGlowing(false), 1300);
+    }, 800);
+  }, []);
+
+  useEffect(() => {
+    const id = setInterval(cycleTitle, 5000);
+    return () => clearInterval(id);
+  }, [cycleTitle]);
+
   return (
     <div className="public-shell">
-      <PublicHeader />
-
-      <main className="public-layout">
-        <section className="landing-hero">
+      <section className="landing-hero-banner">
+        <PublicHeader />
+        <div className="landing-hero">
           <div className="landing-hero-eyebrow">{LANDING_HERO.eyebrow}</div>
-          <h1 className="landing-hero-title">{LANDING_HERO.title}</h1>
+          <h1 className={`landing-hero-title ${animClass}`}>
+            {LANDING_HERO.titles[titleIndex]}
+          </h1>
           <p className="landing-hero-copy">{LANDING_HERO.copy}</p>
           <div className="landing-hero-actions">
             <Link
               to={LANDING_HERO.tertiaryCTA.to}
-              className="btn btn-cta-large"
+              className={`btn btn-cta-large${glowing ? " glow" : ""}`}
             >
-              <span className="cta-badge">Start now</span>
+              {" "}
               {LANDING_HERO.tertiaryCTA.label}
               <ArrowRight size={18} strokeWidth={2.2} />
             </Link>
           </div>
-        </section>
+        </div>
+        <div className="landing-hero-banner-inner">
+          <PublicSituationSection />
+        </div>
+      </section>
 
-        <PublicSituationSection />
+      <main className="public-layout">
+
+        <section className="landing-one-health">
+          <h2 className="landing-section-title">One Health starts with you</h2>
+          <p className="landing-one-health-copy">
+            People, animals, and the environment are connected — when one is
+            affected, all are at risk. Detect is a participatory surveillance
+            app that lets anyone in Arizona report on human health, animal and
+            wildlife concerns, or environmental conditions. Every report helps
+            public-health partners see the full picture and respond faster.
+          </p>
+        </section>
 
         <section id="about" className="landing-pillars">
           {LANDING_PILLARS.map((pillar) => {

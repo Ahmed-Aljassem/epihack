@@ -31,13 +31,13 @@ const LAYER_OPTIONS = [
 const VIEW_OPTIONS = [
   { id: "points", label: "Points" },
   { id: "heatmap", label: "Heatmap" },
-  { id: "both", label: "Both" },
+  { id: "choropleth", label: "By ZIP" },
 ];
 
 export default function PublicSituationSection() {
   const [range, setRange] = useState("7d");
-  const [layerMode, setLayerMode] = useState("both");
-  const [viewMode, setViewMode] = useState("both");
+  const [layerMode, setLayerMode] = useState("reports");
+  const [viewMode, setViewMode] = useState("points");
   const {
     markers: resourceMarkers,
     totalEnabledCount: totalResourceCount,
@@ -135,33 +135,58 @@ export default function PublicSituationSection() {
         <div className="landing-situation-note">
           {layerMode === "resources"
             ? "Resource mode highlights cooling, hydration, and respite sites without report overlays."
-            : layerMode === "both"
-              ? "Combined mode overlays report signals with nearby support resources."
-              : "Report mode focuses on surveillance points and density trends."}
+            : viewMode === "choropleth"
+              ? "ZIP view shades each ZIP code area by how many reports fall within it."
+              : layerMode === "both"
+                ? "Combined mode overlays report signals with nearby support resources."
+                : "Report mode focuses on surveillance points and density trends."}
         </div>
 
         <div className="landing-situation-legend">
-          <span className="landing-situation-legend-item">
-            <span
-              className="map-legend-dot"
-              style={{ background: CATEGORY_COLORS.people }}
-            />
-            People · {reportCounts.people}
-          </span>
-          <span className="landing-situation-legend-item">
-            <span
-              className="map-legend-dot"
-              style={{ background: CATEGORY_COLORS.animal }}
-            />
-            Animal · {reportCounts.animal}
-          </span>
-          <span className="landing-situation-legend-item">
-            <span
-              className="map-legend-dot"
-              style={{ background: CATEGORY_COLORS.env }}
-            />
-            Environment · {reportCounts.env}
-          </span>
+          {viewMode === "choropleth" ? (
+            <>
+              {[
+                { label: "0", color: "rgba(209, 233, 222, 0.5)" },
+                { label: "1–2", color: "#b2dfdb" },
+                { label: "3–4", color: "#4db6ac" },
+                { label: "5–9", color: "#26a69a" },
+                { label: "10–19", color: "#00897b" },
+                { label: "20+", color: "#00695c" },
+              ].map((step) => (
+                <span key={step.label} className="landing-situation-legend-item">
+                  <span className="map-legend-dot" style={{ background: step.color }} />
+                  {step.label}
+                </span>
+              ))}
+              <span className="landing-situation-legend-item" style={{ opacity: 0.7 }}>
+                reports per ZIP
+              </span>
+            </>
+          ) : (
+            <>
+              <span className="landing-situation-legend-item">
+                <span
+                  className="map-legend-dot"
+                  style={{ background: CATEGORY_COLORS.people }}
+                />
+                People · {reportCounts.people}
+              </span>
+              <span className="landing-situation-legend-item">
+                <span
+                  className="map-legend-dot"
+                  style={{ background: CATEGORY_COLORS.animal }}
+                />
+                Animal · {reportCounts.animal}
+              </span>
+              <span className="landing-situation-legend-item">
+                <span
+                  className="map-legend-dot"
+                  style={{ background: CATEGORY_COLORS.env }}
+                />
+                Environment · {reportCounts.env}
+              </span>
+            </>
+          )}
           {RESOURCE_GROUP_ORDER.map((group) => (
             <span key={group} className="landing-situation-legend-item">
               <span

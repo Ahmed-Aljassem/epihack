@@ -9,6 +9,7 @@ export const MAP_VIEW_MODES = [
   { id: "points", label: "Points" },
   { id: "heatmap", label: "Heatmap" },
   { id: "both", label: "Both" },
+  { id: "choropleth", label: "By ZIP" },
 ];
 
 export function getMapModeDescription(mode) {
@@ -17,6 +18,9 @@ export function getMapModeDescription(mode) {
   }
   if (mode === "heatmap") {
     return "Heatmap view emphasizes where nearby reports are concentrating across the current filtered set.";
+  }
+  if (mode === "choropleth") {
+    return "ZIP view shades each ZIP code area by how many reports fall within it.";
   }
   return "Both view overlays report locations on top of the hotspot surface for quick triage.";
 }

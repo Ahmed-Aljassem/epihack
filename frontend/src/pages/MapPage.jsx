@@ -253,7 +253,30 @@ export default function MapPage() {
               totalEnabledCount={totalResourceCount}
             />
           )}
-          {showReports && (
+          {showReports && mapMode === "choropleth" && (
+            <div className="map-legend">
+              {[
+                { label: "0", color: "rgba(209, 233, 222, 0.5)" },
+                { label: "1–2", color: "#b2dfdb" },
+                { label: "3–4", color: "#4db6ac" },
+                { label: "5–9", color: "#26a69a" },
+                { label: "10–19", color: "#00897b" },
+                { label: "20+", color: "#00695c" },
+              ].map((step) => (
+                <span key={step.label} className="map-legend-item">
+                  <span
+                    className="map-legend-dot"
+                    style={{ background: step.color }}
+                  />
+                  {step.label}
+                </span>
+              ))}
+              <span className="map-legend-item" style={{ marginLeft: 8, opacity: 0.7 }}>
+                reports per ZIP
+              </span>
+            </div>
+          )}
+          {showReports && mapMode !== "choropleth" && (
             <div className="map-legend">
               {LEGEND.map((meta) => (
                 <span key={meta.key} className="map-legend-item">

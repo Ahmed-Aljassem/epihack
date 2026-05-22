@@ -4,13 +4,17 @@ is an expert console; community reporting happens in the mobile app.
 */
 
 export const LANDING_HERO = {
-  eyebrow: "One Health · Arizona",
-  title:
-    "Spot health risks earlier, across people, animals, and the environment.",
-  copy: "Community members report what they're seeing through the mobile app. Public-health partners triage, route, and respond from this console.",
+  eyebrow: "",
+  titles: [
+    "Feel it. See it. Report it. Protect your community.",
+    "Arizona's got 7 million health detectives. You're one of them.",
+    "What you notice today could save someone's tomorrow.",
+    "You don't need a lab coat to make a difference.",
+  ],
+  copy: "Report how you're feeling in 30 seconds and help protect Arizona's community.",
   primaryCTA: { label: "Sign in to console", to: "/login" },
   secondaryCTA: { label: "About the project", to: "#about" },
-  tertiaryCTA: { label: "How are you feeling?", to: "/report" },
+  tertiaryCTA: { label: "Check in now", to: "/report" },
 };
 
 export const LANDING_PILLARS = [
