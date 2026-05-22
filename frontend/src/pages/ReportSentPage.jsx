@@ -29,7 +29,7 @@ export default function ReportSentPage() {
                 coordinate response across Arizona.
               </p>
               <div className="report-sent-actions">
-                <Link to="/register" className="btn btn-primary">
+                <Link to="/user/register" className="btn btn-primary">
                   Create an account
                   <ArrowRight size={16} strokeWidth={2.2} />
                 </Link>

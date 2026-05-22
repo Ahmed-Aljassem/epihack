@@ -27,6 +27,9 @@ const SurveyDetailPage = lazy(() => import("./pages/SurveyDetailPage"));
 const MyResponsesPage = lazy(() => import("./pages/MyResponsesPage"));
 const FillReportPage = lazy(() => import("./pages/FillReportPage"));
 const ReportSentPage = lazy(() => import("./pages/ReportSentPage"));
+const UserLoginPage = lazy(() => import("./pages/UserLoginPage"));
+const UserRegisterPage = lazy(() => import("./pages/UserRegisterPage"));
+const UserDashboardPage = lazy(() => import("./pages/UserDashboardPage"));
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -44,6 +47,14 @@ function GuestRoute({ children }) {
   const { user, loading } = useAuth();
   if (loading) return null;
   return !user ? children : <Navigate to="/agency/dashboard" replace />;
+}
+
+function UserProtectedRoute({ children }) {
+  const userSession = localStorage.getItem("user_session");
+  if (!userSession) {
+    return <Navigate to="/user/login" replace />;
+  }
+  return children;
 }
 
 export default function App() {
@@ -81,6 +92,18 @@ export default function App() {
             {/* Public report submission */}
             <Route path="/report" element={<FillReportPage />} />
             <Route path="/report/sent" element={<ReportSentPage />} />
+
+            {/* Public user authentication */}
+            <Route path="/user/login" element={<UserLoginPage />} />
+            <Route path="/user/register" element={<UserRegisterPage />} />
+            <Route
+              path="/user/dashboard"
+              element={
+                <UserProtectedRoute>
+                  <UserDashboardPage />
+                </UserProtectedRoute>
+              }
+            />
 
             {/* Guest-only */}
             <Route
