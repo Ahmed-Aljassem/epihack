@@ -5,6 +5,8 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import { getUserProfile, getReportStats, getMyReports, clearAuth, getNotifsOn, setNotifsOn, SavedReport, getLang, setLang, getThemeMode, setThemeMode } from '@/utils/storage';
+import { useLang, updateLang } from '@/utils/i18n';
+import { supabase } from '@/utils/supabase';
 
 const t = {
   bg: '#FAFAFA', card: '#FFFFFF', text: '#111', sub: '#888',
@@ -16,24 +18,70 @@ const LANG_MAP: Record<string, string> = { EN: 'English', ES: 'Español', TO: "O
 const THEME_MAP: Record<string, string> = { light: 'Light', dark: 'Dark', auto: 'Auto' };
 
 export default function ProfileScreen() {
-  const [profile, setProfile] = useState<{ name: string | null; email: string | null; token: string | null }>({ name: null, email: null, token: null });
+  const [profile, setProfile] = useState<{ name: string | null; email: string | null; token: string | null; phone: string | null; age: string | null; profession: string | null; pets: string | null }>({ name: null, email: null, token: null, phone: null, age: null, profession: null, pets: null });
   const [stats, setStats] = useState({ count: 0, streak: 0 });
   const [reports, setReports] = useState<SavedReport[]>([]);
   const [notifsOn, setNotifsState] = useState(true);
-  const [lang, setLangState] = useState('EN');
+  const { lang, loc } = useLang();
   const [theme, setThemeState] = useState('light');
 
   const load = useCallback(async () => {
-    setProfile(await getUserProfile());
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+      const meta = session.user.user_metadata || {};
+      setProfile({
+        name: meta.full_name || 'Reporter',
+        email: session.user.email || null,
+        token: session.access_token,
+        phone: meta.phone_number || null,
+        age: meta.age || null,
+        profession: meta.profession || null,
+        pets: meta.pets || null,
+      });
+    } else {
+      setProfile({ name: null, email: null, token: null, phone: null, age: null, profession: null, pets: null });
+    }
+    
     setStats(await getReportStats());
     setReports(await getMyReports());
     setNotifsState(await getNotifsOn());
-    setLangState(await getLang());
     setThemeState(await getThemeMode());
   }, []);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { 
+    load(); 
+    const { data: authListener } = supabase.auth.onAuthStateChange(() => load());
+    return () => { authListener.subscription.unsubscribe(); };
+  }, [load]);
+  
   const isLoggedIn = !!profile.token;
+
+  const editField = (field: string, title: string, placeholder: string, keyboardType: any = 'default') => {
+    Alert.prompt(title, '', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Save', onPress: async (val) => {
+        if (!val) return;
+        try {
+          // 1. Update Auth Metadata (User object)
+          await supabase.auth.updateUser({ data: { [field]: val } });
+          
+          // 2. Add to Supabase Database (profiles table)
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.user?.id) {
+            await supabase.from('profiles').upsert({ 
+              id: session.user.id, 
+              [field]: val,
+              updated_at: new Date().toISOString()
+            });
+          }
+          
+          load();
+        } catch (err) {
+          console.log('Error saving to database:', err);
+        }
+      }}
+    ], 'plain-text', '', keyboardType);
+  };
 
   const pick = (title: string, labels: string[], keys: string[], setter: (k: string) => void, saver: (k: string) => Promise<void>) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -50,10 +98,14 @@ export default function ProfileScreen() {
     }
   };
 
-  const handleLogout = async () => {
+  const handleLogout = () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-    await clearAuth();
-    setProfile({ name: null, email: null, token: null });
+    // Instantly clear UI state so it feels snappy
+    setProfile({ name: null, email: null, token: null, phone: null, age: null, profession: null, pets: null });
+    
+    // Perform actual sign out operations in the background
+    clearAuth().catch(() => {});
+    supabase.auth.signOut().catch(e => console.log('Sign out error:', e));
   };
 
   const SLabel = ({ children, icon }: { children: string; icon?: keyof typeof Ionicons.glyphMap }) => (
@@ -89,7 +141,7 @@ export default function ProfileScreen() {
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 60 }}>
 
-          <Text style={{ fontSize: 28, fontFamily: 'Manrope_700Bold', color: t.text, letterSpacing: -0.6, paddingTop: 8 }}>Profile</Text>
+          <Text style={{ fontSize: 28, fontFamily: 'Manrope_700Bold', color: t.text, letterSpacing: -0.6, paddingTop: 8 }}>{loc.p_prof}</Text>
 
           {/* Avatar */}
           <View style={{
@@ -107,7 +159,7 @@ export default function ProfileScreen() {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={{ fontSize: 17, fontFamily: 'Manrope_600SemiBold', color: t.text }}>
-                {isLoggedIn ? (profile.name || 'Reporter') : 'Anonymous Reporter'}
+                {isLoggedIn ? (profile.name || 'Reporter') : loc.p_anon}
               </Text>
               <Text style={{ fontFamily: 'Manrope_400Regular',  fontSize: 12, color: t.sub, marginTop: 2 }}>Tucson, AZ</Text>
             </View>
@@ -115,27 +167,29 @@ export default function ProfileScreen() {
               <TouchableOpacity activeOpacity={0.8}
                 onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push({ pathname: '/auth-modal', params: { mode: 'signup' } }); }}
                 style={{ backgroundColor: t.accent, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 14 }}>
-                <Text style={{ color: '#FFF', fontSize: 13, fontFamily: 'Manrope_600SemiBold' }}>Sign Up</Text>
+                <Text style={{ color: '#FFF', fontSize: 13, fontFamily: 'Manrope_600SemiBold' }}>{loc.p_signup}</Text>
               </TouchableOpacity>
             )}
           </View>
 
-          {/* Stats */}
-          <SLabel icon="trophy-outline">Your impact</SLabel>
-          <View style={{ backgroundColor: t.card, borderRadius: 14, paddingVertical: 18, alignItems: 'center' }}>
-            <Text style={{ color: t.hint, fontSize: 10, fontFamily: 'Manrope_600SemiBold', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4 }}>Reports submitted</Text>
-            <Text style={{ color: t.text, fontSize: 32, fontFamily: 'Manrope_700Bold' }}>{stats.count}</Text>
-            <Text style={{ fontFamily: 'Manrope_400Regular',  color: t.sub, fontSize: 12, marginTop: 4 }}>
-              {stats.streak > 0 ? `${stats.streak} week streak` : 'Start reporting weekly'}
-            </Text>
-          </View>
+
+          {/* Personal Info */}
+          {isLoggedIn && (
+            <>
+              <SLabel icon="person-outline">Personal Info</SLabel>
+              <Row icon="call-outline" label="Phone Number" right={profile.phone || 'Add'} onPress={() => editField('phone_number', 'Phone Number', 'e.g. 555-1234', 'phone-pad')} />
+              <Row icon="calendar-outline" label="Age" right={profile.age || 'Add'} onPress={() => editField('age', 'Age', 'e.g. 35', 'number-pad')} />
+              <Row icon="briefcase-outline" label="Profession" right={profile.profession || 'Add'} onPress={() => editField('profession', 'Profession', 'e.g. Teacher')} />
+              <Row icon="paw-outline" label="Number of Pets" right={profile.pets || 'Add'} onPress={() => editField('pets', 'Number of Pets', 'e.g. 2', 'number-pad')} />
+            </>
+          )}
 
           {/* Recent Reports */}
-          <SLabel icon="time-outline">Recent reports</SLabel>
+          <SLabel icon="time-outline">{loc.p_rec}</SLabel>
           {reports.length === 0 ? (
             <View style={{ backgroundColor: t.card, borderRadius: 14, padding: 20, alignItems: 'center' }}>
               <Ionicons name="document-outline" size={22} color={t.hint} />
-              <Text style={{ fontFamily: 'Manrope_400Regular',  color: t.hint, fontSize: 13, marginTop: 6 }}>No reports yet</Text>
+              <Text style={{ fontFamily: 'Manrope_400Regular',  color: t.hint, fontSize: 13, marginTop: 6 }}>{loc.p_no_rep}</Text>
             </View>
           ) : (
             reports.slice(0, 3).map((r, i) => (
@@ -154,17 +208,17 @@ export default function ProfileScreen() {
                   <Text style={{ fontFamily: 'Manrope_400Regular',  fontSize: 11, color: t.hint, marginTop: 2 }}>{r.date}</Text>
                 </View>
                 <View style={{ backgroundColor: t.accentSoft, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1.5, borderColor: t.accent }}>
-                  <Text style={{ color: t.accent, fontSize: 10, fontFamily: 'Manrope_600SemiBold' }}>Sent</Text>
+                  <Text style={{ color: t.accent, fontSize: 10, fontFamily: 'Manrope_600SemiBold' }}>{loc.p_sent}</Text>
                 </View>
               </View>
             ))
           )}
 
           {/* Settings */}
-          <SLabel icon="settings-outline">Settings</SLabel>
-          <Row icon="globe-outline" label="Language" right={LANG_MAP[lang] || lang}
-            onPress={() => pick('Select Language', ['English', 'Español', "O'odham ñiok"], ['EN', 'ES', 'TO'], setLangState, setLang)} />
-          <Row icon="location-outline" label="Location" right="85719" onPress={() => {}} />
+          <SLabel icon="settings-outline">{loc.p_set}</SLabel>
+          <Row icon="globe-outline" label={loc.p_lang} right={LANG_MAP[lang] || lang}
+            onPress={() => pick(loc.sel_lang || 'Select Language', ['English', 'Español', "O'odham ñiok"], ['EN', 'ES', 'TO'], updateLang, () => {})} />
+          <Row icon="location-outline" label={loc.p_loc} right="85719" onPress={() => {}} />
 
           {/* Notifications toggle */}
           <View style={{
@@ -175,27 +229,27 @@ export default function ProfileScreen() {
             <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: t.fill, alignItems: 'center', justifyContent: 'center' }}>
               <Ionicons name="notifications-outline" size={16} color={t.sub} />
             </View>
-            <Text style={{ flex: 1, fontSize: 15, color: t.text, fontFamily: 'Manrope_500Medium' }}>Notifications</Text>
+            <Text style={{ flex: 1, fontSize: 15, color: t.text, fontFamily: 'Manrope_500Medium' }}>{loc.p_notif}</Text>
             <Switch value={notifsOn}
               onValueChange={(v) => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setNotifsState(v); setNotifsOn(v); }}
               trackColor={{ true: t.accent, false: '#E0E0E0' }} thumbColor="#FFF"
               style={{ transform: [{ scaleX: 0.85 }, { scaleY: 0.85 }] }} />
           </View>
 
-          <Row icon="moon-outline" label="Appearance" right={THEME_MAP[theme] || theme}
-            onPress={() => pick('Appearance', ['Light', 'Dark', 'Auto'], ['light', 'dark', 'auto'], setThemeState, setThemeMode)} />
+          <Row icon="moon-outline" label={loc.p_app} right={THEME_MAP[theme] || theme}
+            onPress={() => pick(loc.appearance || 'Appearance', [loc.light || 'Light', loc.dark || 'Dark', 'Auto'], ['light', 'dark', 'auto'], setThemeState, setThemeMode)} />
 
           {/* About */}
-          <SLabel icon="information-circle-outline">About</SLabel>
-          <Row icon="help-circle-outline" label="How OneHealth Works" onPress={() => {}} />
-          <Row icon="shield-checkmark-outline" label="Privacy Policy" onPress={() => {}} />
-          <Row icon="sparkles-outline" label="How Our AI Works" onPress={() => {}} />
-          <Row icon="chatbubble-ellipses-outline" label="Send Feedback" onPress={() => {}} />
+          <SLabel icon="information-circle-outline">{loc.p_about}</SLabel>
+          <Row icon="help-circle-outline" label={loc.p_how} onPress={() => {}} />
+          <Row icon="shield-checkmark-outline" label={loc.p_priv} onPress={() => {}} />
+          <Row icon="sparkles-outline" label={loc.p_ai} onPress={() => {}} />
+          <Row icon="chatbubble-ellipses-outline" label={loc.p_feed} onPress={() => {}} />
 
           {isLoggedIn && (
             <TouchableOpacity onPress={handleLogout}
-              style={{ backgroundColor: t.card, borderRadius: 14, paddingVertical: 14, alignItems: 'center', marginTop: 20 }}>
-              <Text style={{ color: '#E53935', fontSize: 14, fontFamily: 'Manrope_500Medium' }}>Log Out</Text>
+              style={{ backgroundColor: '#FFEBEE', paddingVertical: 14, borderRadius: 14, alignItems: 'center', marginTop: 24, marginBottom: 12 }}>
+              <Text style={{ color: '#E53935', fontSize: 14, fontFamily: 'Manrope_500Medium' }}>{loc.p_logout}</Text>
             </TouchableOpacity>
           )}
 

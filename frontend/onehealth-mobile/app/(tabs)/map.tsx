@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import * as Location from 'expo-location';
 import { WebView } from 'react-native-webview';
+import { useLang } from '@/utils/i18n';
 
 const t = {
   bg: '#FAFAFA', card: '#FFFFFF', text: '#111', sub: '#888',
@@ -35,6 +36,7 @@ const ZIPS = [
 const AREAS = [...CITIES, ...ZIPS];
 
 export default function MapScreen() {
+  const { loc } = useLang();
   const [filter, setFilter] = useState('All');
   const [selected, setSelected] = useState<string | null>(null);
   const [userLoc, setUserLoc] = useState<{lat: number, lng: number} | null>(null);
@@ -223,7 +225,7 @@ export default function MapScreen() {
               
               <View style={{ flexDirection: 'row', gap: 12 }}>
                 <View style={{ flex: 1, backgroundColor: t.card, borderWidth: 1.5, borderColor: t.line, borderRadius: 14, padding: 16 }}>
-                  <Text style={{ color: t.sub, fontSize: 12, fontFamily: 'Manrope_700Bold', textTransform: 'uppercase', letterSpacing: 1.2 }}>Total Reports</Text>
+                  <Text style={{ color: t.sub, fontSize: 12, fontFamily: 'Manrope_700Bold', textTransform: 'uppercase', letterSpacing: 1.2 }}>{loc.total_rep || 'Total Reports'}</Text>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 }}>
                     <Text style={{ fontSize: 32, fontFamily: 'Manrope_800ExtraBold', color: t.text, letterSpacing: -1 }}>{selArea.count}</Text>
                     <Text style={{ fontSize: 14, fontFamily: 'Manrope_700Bold', color: t.sub }}>{selArea.trend}</Text>
@@ -231,7 +233,7 @@ export default function MapScreen() {
                 </View>
                 
                 <View style={{ flex: 1, backgroundColor: t.accentSoft, borderWidth: 1.5, borderColor: t.accentMid, borderRadius: 14, padding: 16 }}>
-                  <Text style={{ color: t.accent, fontSize: 12, fontFamily: 'Manrope_700Bold', textTransform: 'uppercase', letterSpacing: 1.2 }}>Top Issue</Text>
+                  <Text style={{ color: t.accent, fontSize: 12, fontFamily: 'Manrope_700Bold', textTransform: 'uppercase', letterSpacing: 1.2 }}>{loc.top_iss || 'Top Issue'}</Text>
                   <Text style={{ fontSize: 20, fontFamily: 'Manrope_700Bold', color: t.accent, marginTop: 8, letterSpacing: -0.3 }}>{selArea.top}</Text>
                 </View>
               </View>

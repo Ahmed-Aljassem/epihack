@@ -130,15 +130,15 @@ const OBSERVATIONS = [
   { id: 'Other', icon: 'help-circle-outline' as keyof typeof Ionicons.glyphMap, categories: ['environment'] }
 ];
 const ANIMAL_TYPES = [
-  { id: 'Pets', icon: 'home-outline' as keyof typeof Ionicons.glyphMap, terms: ['pet', 'dog', 'cat', 'rabbit'] },
-  { id: 'Livestock', icon: 'business-outline' as keyof typeof Ionicons.glyphMap, terms: ['livestock', 'cow', 'cattle', 'horse', 'goat', 'sheep', 'pig'] },
-  { id: 'Wildlife', icon: 'leaf-outline' as keyof typeof Ionicons.glyphMap, terms: ['wildlife', 'wild', 'deer', 'coyote', 'bat', 'fox'] },
-  { id: 'Birds', icon: 'egg-outline' as keyof typeof Ionicons.glyphMap, terms: ['bird', 'birds', 'pigeon', 'dove', 'crow'] },
-  { id: 'Poultry', icon: 'restaurant-outline' as keyof typeof Ionicons.glyphMap, terms: ['poultry', 'chicken', 'duck', 'turkey'] },
-  { id: 'Mosquitos', icon: 'bug-outline' as keyof typeof Ionicons.glyphMap, terms: ['mosquito', 'mosquitoes', 'mosquitos'] },
-  { id: 'Rodents', icon: 'bug-outline' as keyof typeof Ionicons.glyphMap, terms: ['rodent', 'mouse', 'mice', 'rat', 'rats'] },
-  { id: 'Reptiles', icon: 'fish-outline' as keyof typeof Ionicons.glyphMap, terms: ['reptile', 'snake', 'lizard', 'turtle'] },
-  { id: 'Other', icon: 'help-circle-outline' as keyof typeof Ionicons.glyphMap, terms: [] },
+  { id: 'Pets', icon: 'home-outline' as keyof typeof Ionicons.glyphMap, badge: require('@/assets/images/animal-type-badges/pets.png'), terms: ['pet', 'dog', 'cat', 'rabbit'] },
+  { id: 'Livestock', icon: 'business-outline' as keyof typeof Ionicons.glyphMap, badge: require('@/assets/images/animal-type-badges/livestock.png'), terms: ['livestock', 'cow', 'cattle', 'horse', 'goat', 'sheep', 'pig'] },
+  { id: 'Wildlife', icon: 'leaf-outline' as keyof typeof Ionicons.glyphMap, badge: require('@/assets/images/animal-type-badges/wildlife.png'), terms: ['wildlife', 'wild', 'deer', 'coyote', 'bat', 'fox'] },
+  { id: 'Birds', icon: 'egg-outline' as keyof typeof Ionicons.glyphMap, badge: require('@/assets/images/animal-type-badges/birds.png'), terms: ['bird', 'birds', 'pigeon', 'dove', 'crow'] },
+  { id: 'Poultry', icon: 'restaurant-outline' as keyof typeof Ionicons.glyphMap, badge: require('@/assets/images/animal-type-badges/poultry.png'), terms: ['poultry', 'chicken', 'duck', 'turkey'] },
+  { id: 'Mosquitos', icon: 'bug-outline' as keyof typeof Ionicons.glyphMap, badge: require('@/assets/images/animal-type-badges/mosquitos.png'), terms: ['mosquito', 'mosquitoes', 'mosquitos'] },
+  { id: 'Rodents', icon: 'bug-outline' as keyof typeof Ionicons.glyphMap, badge: require('@/assets/images/animal-type-badges/rodents.png'), terms: ['rodent', 'mouse', 'mice', 'rat', 'rats'] },
+  { id: 'Reptiles', icon: 'fish-outline' as keyof typeof Ionicons.glyphMap, badge: require('@/assets/images/animal-type-badges/reptiles.png'), terms: ['reptile', 'snake', 'lizard', 'turtle'] },
+  { id: 'Other', icon: 'help-circle-outline' as keyof typeof Ionicons.glyphMap, badge: require('@/assets/images/animal-type-badges/other.png'), terms: [] },
 ];
 type VoiceTarget = 'symptoms' | 'animals' | 'environment';
 type DatePickerTarget = 'animal' | 'environment';
@@ -1090,10 +1090,58 @@ export default function ReportFlow({ onSignUp, onReportSubmitted, onReturnHome, 
           {renderVoiceHelper('animals', 'Describe the animal report', 'Hold to talk and AI will fill matching details.')}
 
           <Label icon="paw-outline">Animal type</Label>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-            {ANIMAL_TYPES.map((type) => (
-              <Chip key={type.id} label={type.id} icon={type.icon} on={animalTypes.includes(type.id)} onP={() => togArr(animalTypes, setAnimalTypes, type.id)} />
-            ))}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start', rowGap: 8 }}>
+            {ANIMAL_TYPES.map((type, index) => {
+              const on = animalTypes.includes(type.id);
+              return (
+                <TouchableOpacity
+                  key={type.id}
+                  activeOpacity={0.74}
+                  onPress={() => togArr(animalTypes, setAnimalTypes, type.id)}
+                  style={{
+                    alignItems: 'center',
+                    width: '31%',
+                    height: compactPhone ? 102 : 110,
+                    marginRight: (index + 1) % 3 === 0 ? 0 : '3.5%',
+                    backgroundColor: on ? t.accentSoft : t.card,
+                    borderRadius: 14,
+                    paddingVertical: compactPhone ? 8 : 10,
+                    paddingHorizontal: 5,
+                    borderWidth: on ? 2 : 1.5,
+                    borderColor: on ? t.accent : t.line,
+                  }}>
+                  <Image source={type.badge} resizeMode="contain" style={{
+                    width: compactPhone ? 56 : 60,
+                    height: compactPhone ? 56 : 60,
+                  }} />
+                  <Text numberOfLines={2} style={{
+                    color: on ? t.text : t.sub,
+                    fontSize: 11,
+                    lineHeight: 13,
+                    marginTop: 5,
+                    textAlign: 'center',
+                    fontFamily: on ? 'Manrope_700Bold' : 'Manrope_600SemiBold',
+                  }}>
+                    {type.id}
+                  </Text>
+                  <View style={{
+                    position: 'absolute',
+                    top: 6,
+                    right: 6,
+                    width: 18,
+                    height: 18,
+                    borderRadius: 9,
+                    borderWidth: 1.6,
+                    borderColor: on ? t.accent : t.line,
+                    backgroundColor: on ? t.accent : 'transparent',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}>
+                    {on && <Ionicons name="checkmark" size={11} color="#FFFFFF" />}
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
           </View>
 
           <Label icon="alert-circle-outline">Incident details</Label>
