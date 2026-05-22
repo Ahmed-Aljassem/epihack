@@ -2,8 +2,9 @@
 Interactive Mapbox map for the agency console.
 
 Renders reports as clustered points, a density heatmap, or both.
-Clicking a cluster zooms in; clicking an unclustered point opens a
-popup with the report summary and a link to its detail page.
+Optional heat-relief resource markers can be overlaid separately.
+Clicking a cluster zooms in; clicking a point or resource opens a
+popup with more detail.
 
 Requires VITE_MAPBOX_TOKEN. Without it, renders a placeholder card
 explaining what's missing.
@@ -11,9 +12,16 @@ explaining what's missing.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import Map, { Layer, Popup, Source } from "react-map-gl/mapbox";
+import Map, {
+  Layer,
+  NavigationControl,
+  Popup,
+  ScaleControl,
+  Source,
+} from "react-map-gl/mapbox";
 import { ExternalLink, MapPinned, Locate } from "lucide-react";
 import { CATEGORY_COLORS } from "../../data/reports";
+import { RESOURCE_GROUPS } from "../../data/heatReliefResources";
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
 
@@ -34,6 +42,11 @@ const CLUSTER_LAYER = "reports-clusters";
 const CLUSTER_COUNT_LAYER = "reports-cluster-count";
 const POINT_LAYER = "reports-points";
 const HEATMAP_LAYER = "reports-heatmap";
+const RESOURCE_SOURCE_ID = "resources-src";
+const RESOURCE_CLUSTER_LAYER = "resources-clusters";
+const RESOURCE_CLUSTER_COUNT_LAYER = "resources-cluster-count";
+const RESOURCE_POINT_LAYER = "resources-points";
+const RESOURCE_POINT_LABEL_LAYER = "resources-point-labels";
 
 const CLUSTER_LAYER_STYLE = {
   id: CLUSTER_LAYER,
@@ -88,7 +101,6 @@ const POINT_LAYER_STYLE = {
       "people", CATEGORY_COLORS.people,
       "animal", CATEGORY_COLORS.animal,
       "env",    CATEGORY_COLORS.env,
-      "vector", CATEGORY_COLORS.vector,
       "#cbd5e1",
     ],
     "circle-radius": 8,
@@ -98,8 +110,95 @@ const POINT_LAYER_STYLE = {
   },
 };
 
-function interactiveLayersForMode(viewMode) {
-  return viewMode === "heatmap" ? [] : [CLUSTER_LAYER, POINT_LAYER];
+const RESOURCE_CLUSTER_LAYER_STYLE = {
+  id: RESOURCE_CLUSTER_LAYER,
+  type: "circle",
+  source: RESOURCE_SOURCE_ID,
+  filter: ["has", "point_count"],
+  paint: {
+    "circle-color": [
+      "step",
+      ["get", "point_count"],
+      "rgba(15, 23, 42, 0.86)",
+      8, "rgba(30, 41, 59, 0.9)",
+      20, "rgba(51, 65, 85, 0.94)",
+    ],
+    "circle-radius": [
+      "step",
+      ["get", "point_count"],
+      15,
+      8, 19,
+      20, 24,
+    ],
+    "circle-stroke-width": 2,
+    "circle-stroke-color": "rgba(255, 255, 255, 0.94)",
+  },
+};
+
+const RESOURCE_CLUSTER_COUNT_LAYER_STYLE = {
+  id: RESOURCE_CLUSTER_COUNT_LAYER,
+  type: "symbol",
+  source: RESOURCE_SOURCE_ID,
+  filter: ["has", "point_count"],
+  layout: {
+    "text-field": ["get", "point_count_abbreviated"],
+    "text-font": ["DIN Offc Pro Medium", "Arial Unicode MS Bold"],
+    "text-size": 12,
+  },
+  paint: {
+    "text-color": "#ffffff",
+  },
+};
+
+const RESOURCE_POINT_LAYER_STYLE = {
+  id: RESOURCE_POINT_LAYER,
+  type: "circle",
+  source: RESOURCE_SOURCE_ID,
+  filter: ["!", ["has", "point_count"]],
+  paint: {
+    "circle-color": [
+      "match",
+      ["get", "group"],
+      "coolingCenters", RESOURCE_GROUPS.coolingCenters.color,
+      "hydrationStations", RESOURCE_GROUPS.hydrationStations.color,
+      "respiteCenters", RESOURCE_GROUPS.respiteCenters.color,
+      "#475569",
+    ],
+    "circle-radius": [
+      "interpolate",
+      ["linear"],
+      ["zoom"],
+      5, 6,
+      9, 8,
+      12, 10,
+    ],
+    "circle-stroke-width": 2,
+    "circle-stroke-color": "rgba(255, 255, 255, 0.96)",
+    "circle-opacity": 0.92,
+  },
+};
+
+const RESOURCE_POINT_LABEL_LAYER_STYLE = {
+  id: RESOURCE_POINT_LABEL_LAYER,
+  type: "symbol",
+  source: RESOURCE_SOURCE_ID,
+  filter: ["!", ["has", "point_count"]],
+  layout: {
+    "text-field": ["get", "markerLabel"],
+    "text-font": ["DIN Offc Pro Medium", "Arial Unicode MS Bold"],
+    "text-size": 9,
+  },
+  paint: {
+    "text-color": "#ffffff",
+  },
+};
+
+function interactiveLayersForMode(viewMode, showResources) {
+  const layers = viewMode === "heatmap" ? [] : [CLUSTER_LAYER, POINT_LAYER];
+  if (showResources) {
+    layers.push(RESOURCE_CLUSTER_LAYER, RESOURCE_POINT_LAYER);
+  }
+  return layers;
 }
 
 function haversineMi(a, b) {
@@ -198,6 +297,8 @@ function reportsToGeoJSON(reports) {
         coords: r.location?.coords || "",
         category: r.category,
         categorySlug: r.categorySlug,
+        sourceType: r.sourceType,
+        sourceTypeLabel: r.sourceTypeLabel || "",
         summary: r.summary,
         status: r.status,
         heatScore: Number(buildHeatScore(r, reports).toFixed(2)),
@@ -206,8 +307,33 @@ function reportsToGeoJSON(reports) {
   };
 }
 
+function resourcesToGeoJSON(resourceMarkers) {
+  return {
+    type: "FeatureCollection",
+    features: resourceMarkers.map((resource, index) => ({
+      type: "Feature",
+      geometry: { type: "Point", coordinates: [resource.lng, resource.lat] },
+      properties: {
+        id: `${resource.group}-${resource.name}-${index}`,
+        group: resource.group,
+        groupLabel: RESOURCE_GROUPS[resource.group]?.label || "Resource",
+        markerLabel: RESOURCE_GROUPS[resource.group]?.markerLabel || "R",
+        name: resource.name,
+        address: resource.address || "",
+        city: resource.city || "",
+        hours: resource.hours || "",
+        org: resource.org || "",
+        county: resource.county || "",
+      },
+    })),
+  };
+}
+
 export default function ReportsMap({
   reports,
+  resourceMarkers = [],
+  showReports = true,
+  showResources = true,
   height = 420,
   initialView = DEFAULT_VIEW,
   onSelectReport,
@@ -218,22 +344,32 @@ export default function ReportsMap({
   const [popup, setPopup] = useState(null);
 
   const geojson = useMemo(() => reportsToGeoJSON(reports), [reports]);
-  const showHeatmap = viewMode === "heatmap" || viewMode === "both";
-  const showPointLayers = viewMode === "points" || viewMode === "both";
+  const resourceGeojson = useMemo(
+    () => resourcesToGeoJSON(resourceMarkers),
+    [resourceMarkers],
+  );
+  const showHeatmap = showReports && (viewMode === "heatmap" || viewMode === "both");
+  const showPointLayers = showReports && (viewMode === "points" || viewMode === "both");
   const heatmapLayerStyle = useMemo(
     () => buildHeatmapLayerStyle(showPointLayers),
     [showPointLayers],
   );
   const interactiveLayerIds = useMemo(
-    () => interactiveLayersForMode(viewMode),
-    [viewMode],
+    () => interactiveLayersForMode(showReports ? viewMode : "heatmap", showResources),
+    [showReports, showResources, viewMode],
   );
 
   useEffect(() => {
-    if (!showPointLayers) {
+    if (!showPointLayers && popup?.kind === "report") {
       setPopup(null);
     }
-  }, [showPointLayers]);
+  }, [popup?.kind, showPointLayers]);
+
+  useEffect(() => {
+    if (!showResources && popup?.kind === "resource") {
+      setPopup(null);
+    }
+  }, [popup?.kind, showResources]);
 
   // Click handler: zoom into clusters, open popup for points.
   const onClick = useCallback((event) => {
@@ -262,11 +398,40 @@ export default function ReportsMap({
     if (feature.layer.id === POINT_LAYER) {
       const [lng, lat] = feature.geometry.coordinates;
       setPopup({
+        kind: "report",
         longitude: lng,
         latitude: lat,
         properties: feature.properties,
       });
       onSelectReport?.(feature.properties.id);
+      return;
+    }
+
+    if (feature.layer.id === RESOURCE_CLUSTER_LAYER) {
+      const clusterId = feature.properties.cluster_id;
+      const src = map.getSource(RESOURCE_SOURCE_ID);
+      src.getClusterExpansionZoom(clusterId, (err, zoom) => {
+        if (err) return;
+        map.easeTo({
+          center: feature.geometry.coordinates,
+          zoom,
+          duration: 600,
+        });
+      });
+      return;
+    }
+
+    if (feature.layer.id === RESOURCE_POINT_LAYER) {
+      const [lng, lat] = feature.geometry.coordinates;
+      setPopup({
+        kind: "resource",
+        longitude: lng,
+        latitude: lat,
+        resource: {
+          ...feature.properties,
+          color: RESOURCE_GROUPS[feature.properties.group]?.color,
+        },
+      });
     }
   }, [onSelectReport]);
 
@@ -329,6 +494,8 @@ export default function ReportsMap({
         onMouseLeave={onMouseLeave}
         style={{ width: "100%", height: "100%" }}
       >
+        <NavigationControl position="top-left" showCompass={false} />
+        <ScaleControl position="bottom-left" unit="imperial" />
         {showHeatmap && (
           <Source
             id={HEATMAP_SOURCE_ID}
@@ -354,7 +521,23 @@ export default function ReportsMap({
           </Source>
         )}
 
-        {popup && (
+        {showResources && (
+          <Source
+            id={RESOURCE_SOURCE_ID}
+            type="geojson"
+            data={resourceGeojson}
+            cluster
+            clusterRadius={42}
+            clusterMaxZoom={12}
+          >
+            <Layer {...RESOURCE_CLUSTER_LAYER_STYLE} />
+            <Layer {...RESOURCE_CLUSTER_COUNT_LAYER_STYLE} />
+            <Layer {...RESOURCE_POINT_LAYER_STYLE} />
+            <Layer {...RESOURCE_POINT_LABEL_LAYER_STYLE} />
+          </Source>
+        )}
+
+        {popup?.kind === "report" && (
           <Popup
             longitude={popup.longitude}
             latitude={popup.latitude}
@@ -378,6 +561,7 @@ export default function ReportsMap({
               {popup.properties.id}
               {popup.properties.zip ? ` · ZIP ${popup.properties.zip}` : ""}
               {popup.properties.coords ? ` · ${popup.properties.coords}` : ""}
+              {popup.properties.sourceType === "vector" ? ` · ${popup.properties.sourceTypeLabel}` : ""}
             </div>
             <Link
               to={`/agency/reports/${popup.properties.id}`}
@@ -386,6 +570,48 @@ export default function ReportsMap({
               View detail
               <ExternalLink size={12} strokeWidth={2} />
             </Link>
+          </Popup>
+        )}
+
+        {popup?.kind === "resource" && (
+          <Popup
+            longitude={popup.longitude}
+            latitude={popup.latitude}
+            anchor="bottom"
+            offset={18}
+            closeButton
+            closeOnClick={false}
+            onClose={() => setPopup(null)}
+            className="reports-popup resources-popup"
+          >
+            <div className="reports-popup-head">
+              <span
+                className="resource-popup-badge"
+                style={{
+                  "--resource-color": popup.resource.color,
+                }}
+              >
+                {popup.resource.groupLabel}
+              </span>
+            </div>
+            <div className="reports-popup-title">{popup.resource.name}</div>
+            <div className="resource-popup-details">
+              {popup.resource.county && (
+                <div>{popup.resource.county} County</div>
+              )}
+              {popup.resource.address && (
+                <div>{popup.resource.address}</div>
+              )}
+              {popup.resource.city && (
+                <div>{popup.resource.city}</div>
+              )}
+              {popup.resource.hours && (
+                <div>Hours: {popup.resource.hours}</div>
+              )}
+              {popup.resource.org && (
+                <div>Org: {popup.resource.org}</div>
+              )}
+            </div>
           </Popup>
         )}
       </Map>

@@ -2,7 +2,9 @@ import { useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Search, ChevronRight, X, Download } from "lucide-react";
 import ReportFilters from "../components/console/ReportFilters";
+import ResourceGroupToggles from "../components/console/ResourceGroupToggles";
 import { CATEGORY_COLORS } from "../data/reports";
+import { RESOURCE_GROUP_ORDER } from "../data/heatReliefResources";
 import { detectClusters } from "../lib/clusters";
 import { exportReportsCSV } from "../lib/csv";
 import {
@@ -12,6 +14,10 @@ import {
 } from "../lib/reportFilters";
 import ReportsMap from "../components/console/ReportsMap";
 import {
+  MAP_LAYER_MODES,
+  getMapLayerDescription,
+} from "../components/console/mapLayerModes";
+import {
   MAP_VIEW_MODES,
   getMapModeDescription,
 } from "../components/console/mapViewModes";
@@ -20,13 +26,13 @@ import {
   filtersFromSearchParams,
   filtersToSearchParams,
 } from "../hooks/useReports";
+import { useHeatReliefResources } from "../hooks/useHeatReliefResources";
 import { filterClient } from "../services/mocks/reports.mock";
 
 const LEGEND = [
   { key: "people", label: "People",      color: CATEGORY_COLORS.people },
   { key: "animal", label: "Animal",      color: CATEGORY_COLORS.animal },
   { key: "env",    label: "Environment", color: CATEGORY_COLORS.env    },
-  { key: "vector", label: "Vector",      color: CATEGORY_COLORS.vector },
 ];
 const MAP_DEFAULT_FILTERS = { ...DEFAULT_REPORT_FILTERS, range: "7d" };
 
@@ -34,9 +40,18 @@ export default function MapPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [mapMode, setMapMode] = useState("both");
+  const [layerMode, setLayerMode] = useState("both");
+  const [enabledResourceGroups, setEnabledResourceGroups] = useState(RESOURCE_GROUP_ORDER);
   const filters = filtersFromSearchParams(searchParams, MAP_DEFAULT_FILTERS);
   const clusterId = searchParams.get("cluster");
   const { allReports, loading, error } = useReports();
+  const {
+    markers: resourceMarkers,
+    groupCounts: resourceGroupCounts,
+    loadingGroups: resourceLoadingGroups,
+    errorGroups: resourceErrorGroups,
+    totalEnabledCount: totalResourceCount,
+  } = useHeatReliefResources(enabledResourceGroups);
 
   const activeCluster = useMemo(() => {
     if (!clusterId) return null;
@@ -62,7 +77,7 @@ export default function MapPage() {
     return visibleReports.reduce((acc, report) => {
       acc[report.categorySlug] = (acc[report.categorySlug] || 0) + 1;
       return acc;
-    }, { people: 0, animal: 0, env: 0, vector: 0 });
+    }, { people: 0, animal: 0, env: 0 });
   }, [visibleReports]);
 
   const mapView = activeCluster
@@ -94,6 +109,18 @@ export default function MapPage() {
     next.delete("cluster");
     setSearchParams(next, { replace: true });
   };
+
+  const toggleResourceGroup = (group) => {
+    setEnabledResourceGroups((current) => (
+      current.includes(group)
+        ? current.filter((entry) => entry !== group)
+        : [...current, group]
+    ));
+  };
+
+  const showReports = layerMode !== "resources";
+  const showResourceControls = layerMode !== "reports";
+  const showResources = showResourceControls && enabledResourceGroups.length > 0;
 
   return (
     <div>
@@ -166,24 +193,44 @@ export default function MapPage() {
             <div>
               <div className="map-card-title">Spatial view</div>
               <div className="map-card-subtitle">
-                Switch between exact report locations and overall density.
+                {layerMode === "resources"
+                  ? "Heat-relief sites across Arizona, grouped for cleaner exploration."
+                  : "Switch between exact report locations and overall density."}
               </div>
             </div>
-            <div className="range-tabs" aria-label="Map view mode">
-              {MAP_VIEW_MODES.map((mode) => (
-                <button
-                  key={mode.id}
-                  className={`range-tab ${mapMode === mode.id ? "is-active" : ""}`}
-                  onClick={() => setMapMode(mode.id)}
-                >
-                  {mode.label}
-                </button>
-              ))}
+            <div className="map-card-controls">
+              <div className="range-tabs" aria-label="Map layer focus">
+                {MAP_LAYER_MODES.map((mode) => (
+                  <button
+                    key={mode.id}
+                    className={`range-tab ${layerMode === mode.id ? "is-active" : ""}`}
+                    onClick={() => setLayerMode(mode.id)}
+                  >
+                    {mode.label}
+                  </button>
+                ))}
+              </div>
+              {showReports && (
+                <div className="range-tabs" aria-label="Map view mode">
+                  {MAP_VIEW_MODES.map((mode) => (
+                    <button
+                      key={mode.id}
+                      className={`range-tab ${mapMode === mode.id ? "is-active" : ""}`}
+                      onClick={() => setMapMode(mode.id)}
+                    >
+                      {mode.label}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
           <ReportsMap
             key={activeCluster?.id || "default"}
             reports={visibleReports}
+            resourceMarkers={resourceMarkers}
+            showReports={showReports}
+            showResources={showResources}
             height={520}
             initialView={mapView}
             viewMode={mapMode}
@@ -191,18 +238,34 @@ export default function MapPage() {
               void id;
             }}
           />
-          <div className="map-mode-note">{getMapModeDescription(mapMode)}</div>
-          <div className="map-legend">
-            {LEGEND.map((meta) => (
-              <span key={meta.key} className="map-legend-item">
-                <span
-                  className="map-legend-dot"
-                  style={{ background: meta.color }}
-                />
-                {meta.label} · {datasetCounts[meta.key] || 0}
-              </span>
-            ))}
+          <div className="map-mode-note">
+            {showReports ? getMapModeDescription(mapMode) : getMapLayerDescription(layerMode)}
           </div>
+          {showResourceControls && (
+            <ResourceGroupToggles
+              compact={layerMode === "both"}
+              focusMode={layerMode === "resources"}
+              enabledGroups={enabledResourceGroups}
+              onToggleGroup={toggleResourceGroup}
+              groupCounts={resourceGroupCounts}
+              loadingGroups={resourceLoadingGroups}
+              errorGroups={resourceErrorGroups}
+              totalEnabledCount={totalResourceCount}
+            />
+          )}
+          {showReports && (
+            <div className="map-legend">
+              {LEGEND.map((meta) => (
+                <span key={meta.key} className="map-legend-item">
+                  <span
+                    className="map-legend-dot"
+                    style={{ background: meta.color }}
+                  />
+                  {meta.label} · {datasetCounts[meta.key] || 0}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="card queue-card map-panel">

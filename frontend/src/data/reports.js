@@ -1,76 +1,74 @@
 /*
-Enriches mock reports into the shape the UI needs
-(category label, status, submittedAt, exact point + mapped ZIP, summary, etc.).
-
-Three rich records (RPT-1024 / 1023 / 1022) are kept for the detail page,
-which expects description / activity / routing / facts.
+Program author: epiHack frontend team + OpenAI Codex
+Program purpose: Normalize raw demo reports into the shared UI model used by
+the dashboard, map, and detail pages, including Arizona location cleanup and
+top-level report-path classification.
 */
 
 import RAW from "./reports.json";
 import { resolveArizonaLocation } from "./arizonaZips";
+import {
+  resolveVectorPathway,
+  synthesizeReportProfile,
+} from "./reportSynthesis";
 
 // ── Category mapping ────────────────────────────────────────────────
-// `type` from mock data -> display label + UI slug
+// Raw non-vector report types map directly into the three main pathways.
 export const CATEGORY_LABEL = {
   human:       "People",
   animal:      "Animal",
   environment: "Environment",
-  vector:      "Vector",
 };
 
-// Stable ID -> filter slug used by chips ("people" / "animal" / ...).
 export const CATEGORY_SLUG = {
   human:       "people",
   animal:      "animal",
   environment: "env",
-  vector:      "vector",
 };
 
 export const CATEGORY_COLORS = {
   people: "#a5b4fc",
   animal: "#34d399",
   env:    "#86efac",
-  vector: "#fdba74",
 };
-
-const STATUSES = ["New", "In review", "Routed", "Resolved"];
 
 // One canonical "anchor" Date so submittedAt is deterministic across
 // reloads (otherwise polling shows shifting timestamps for static data).
-// Anchored to the start of "today" in the user's local timezone.
+// Anchored to late afternoon "today" in the user's local timezone so
+// charts can still show same-day activity without becoming non-deterministic.
 const ANCHOR = (() => {
   const d = new Date();
-  d.setHours(0, 0, 0, 0);
+  d.setHours(18, 0, 0, 0);
   return d.getTime();
 })();
 
-const SUMMARY_TEMPLATES = {
-  human:       (id) => `Community health signal #${id}`,
-  animal:      (id) => `Animal observation #${id}`,
-  environment: (id) => `Environmental concern #${id}`,
-  vector:      (id) => `Vector activity #${id}`,
-};
-
 function enrich(raw) {
   const normalizedLocation = resolveArizonaLocation(raw);
-  const slug = CATEGORY_SLUG[raw.type] || "people";
-  const label = CATEGORY_LABEL[raw.type] || "People";
-
-  // Deterministic status — `id % 4` distributes evenly across statuses.
-  const status = STATUSES[(raw.id - 1) % STATUSES.length];
-
-  // Deterministic timestamp spread over the past 7 days.
-  // Multiplier mixes id to avoid the "every 4th id has identical minute" pattern.
-  const minutesAgo = (raw.id * 137) % (7 * 24 * 60);
-  const submittedAtDate = new Date(ANCHOR - minutesAgo * 60_000);
-
+  const vectorPathway = raw.type === "vector"
+    ? resolveVectorPathway(raw, normalizedLocation)
+    : null;
+  const slug = vectorPathway?.topLevelSlug || CATEGORY_SLUG[raw.type] || "people";
+  const label = vectorPathway?.topLevelLabel || CATEGORY_LABEL[raw.type] || "People";
   const reportId = `RPT-${1000 + raw.id}`;
+  const synthetic = synthesizeReportProfile({
+    raw,
+    categorySlug: slug,
+    categoryLabel: label,
+    location: normalizedLocation,
+    anchorMs: ANCHOR,
+    sourceType: raw.type,
+    vectorPathway,
+  });
 
   return {
     // Original fields preserved
     id: reportId,
     rawId: raw.id,
     type: raw.type,
+    sourceType: raw.type,
+    sourceTypeLabel: raw.type === "vector" ? "Vector-linked" : label,
+    signalPath: vectorPathway?.pathwayLabel || null,
+    signalDomain: vectorPathway?.vectorType || null,
     zip: normalizedLocation.zip,
     county: normalizedLocation.county,
     city: normalizedLocation.city,
@@ -81,10 +79,11 @@ function enrich(raw) {
     category: label,
     categorySlug: slug,
     color: CATEGORY_COLORS[slug],
-    status,
-    summary: SUMMARY_TEMPLATES[raw.type](raw.id),
-    submittedAt: submittedAtDate.toISOString(),
-    submittedShort: submittedAtDate.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }),
+    status: synthetic.status,
+    summary: synthetic.summary,
+    submittedAt: synthetic.submittedAtDate.toISOString(),
+    submittedShort: synthetic.submittedAtDate.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }),
+    analytics: synthetic.analytics,
 
     // User-facing location keeps both the mapped Arizona ZIP and the exact
     // coordinates when the source provided them.
@@ -142,11 +141,11 @@ export const RICH_DETAILS = {
     tags: ["People · fever", "Self-reported"],
   },
   "RPT-1022": {
-    summary: "Mosquito activity ↑",
+    summary: "Vector-linked activity increase",
     location: { zip: "85705", county: "Pima Co.", city: "Tucson" },
     submittedLabel: "Today · 12:31 PM",
     submittedShort: "12:31 PM",
-    tags: ["Vector", "Pattern · rising"],
+    tags: ["Vector-linked", "Pattern · rising"],
   },
 };
 

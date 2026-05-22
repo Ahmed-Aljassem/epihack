@@ -9,7 +9,6 @@ export const REPORT_CATEGORY_FILTERS = [
   { id: "people", label: "People" },
   { id: "animal", label: "Animal" },
   { id: "env", label: "Environment" },
-  { id: "vector", label: "Vector" },
 ];
 
 export const REPORT_RANGE_FILTERS = ["24h", "7d", "30d", "All"];
@@ -67,7 +66,6 @@ export function countReportsByCategory(reports = []) {
     people: 0,
     animal: 0,
     env: 0,
-    vector: 0,
   };
 
   reports.forEach((report) => {
