@@ -32,13 +32,14 @@ export default function PublicHomePage() {
           <h1 className="landing-hero-title">{LANDING_HERO.title}</h1>
           <p className="landing-hero-copy">{LANDING_HERO.copy}</p>
           <div className="landing-hero-actions">
-            <Link to={LANDING_HERO.tertiaryCTA.to} className="btn btn-primary">
+            <Link
+              to={LANDING_HERO.tertiaryCTA.to}
+              className="btn btn-cta-large"
+            >
+              <span className="cta-badge">Start now</span>
               {LANDING_HERO.tertiaryCTA.label}
-              <ArrowRight size={16} strokeWidth={2.2} />
+              <ArrowRight size={18} strokeWidth={2.2} />
             </Link>
-            <a href={LANDING_HERO.secondaryCTA.to} className="btn btn-ghost">
-              {LANDING_HERO.secondaryCTA.label}
-            </a>
           </div>
         </section>
 
