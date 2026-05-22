@@ -15,7 +15,38 @@ const KEYS = {
   MY_REPORTS: 'myReports',
   NOTIFS_ON: 'notifsOn',
   COMMUNITY_DISMISSED: 'communityDisclaimerDismissed',
+  PROFILE: 'localProfile',
 };
+
+// ─── Local profile (mirrors what we collect; some fields aren't in Cognito yet) ─
+export interface LocalProfile {
+  name?: string;
+  email?: string;
+  age?: string;
+  sex?: string;
+  occupation?: string;
+  phone?: string;
+  household?: string;
+  zip?: string;
+  lat?: number;
+  lng?: number;
+}
+
+export async function getLocalProfile(): Promise<LocalProfile> {
+  const raw = await AsyncStorage.getItem(KEYS.PROFILE);
+  return raw ? JSON.parse(raw) : {};
+}
+
+export async function setLocalProfile(patch: LocalProfile): Promise<LocalProfile> {
+  const current = await getLocalProfile();
+  const merged = { ...current, ...patch };
+  await AsyncStorage.setItem(KEYS.PROFILE, JSON.stringify(merged));
+  return merged;
+}
+
+export async function clearLocalProfile(): Promise<void> {
+  await AsyncStorage.removeItem(KEYS.PROFILE);
+}
 
 // ─── Helpers ─────────────────────────────────────────────────
 export async function hasCompletedFirstReport(): Promise<boolean> {
