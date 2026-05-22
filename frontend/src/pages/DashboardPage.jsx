@@ -1,9 +1,15 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Search, Plus, ChevronRight, RefreshCw } from "lucide-react";
+import DashboardCategoryChart from "../components/console/DashboardCategoryChart";
+import DashboardSignalsChart from "../components/console/DashboardSignalsChart";
+import DashboardTrendChart from "../components/console/DashboardTrendChart";
 import ReportFilters from "../components/console/ReportFilters";
+import ResourceGroupToggles from "../components/console/ResourceGroupToggles";
 import { CATEGORY_COLORS } from "../data/reports";
+import { RESOURCE_GROUP_ORDER } from "../data/heatReliefResources";
 import { useReports } from "../hooks/useReports";
+import { useHeatReliefResources } from "../hooks/useHeatReliefResources";
 import { useTickingAgo } from "../hooks/useTickingAgo";
 import { detectClusters } from "../lib/clusters";
 import {
@@ -14,6 +20,10 @@ import {
 } from "../lib/reportFilters";
 import ReportsMap from "../components/console/ReportsMap";
 import {
+  MAP_LAYER_MODES,
+  getMapLayerDescription,
+} from "../components/console/mapLayerModes";
+import {
   MAP_VIEW_MODES,
   getMapModeDescription,
 } from "../components/console/mapViewModes";
@@ -23,7 +33,6 @@ const LEGEND_DEFS = [
   { key: "people", label: "People",      color: CATEGORY_COLORS.people },
   { key: "animal", label: "Animal",      color: CATEGORY_COLORS.animal },
   { key: "env",    label: "Env",         color: CATEGORY_COLORS.env    },
-  { key: "vector", label: "Vector",      color: CATEGORY_COLORS.vector },
 ];
 
 const QUEUE_TABS = [
@@ -44,7 +53,9 @@ export default function DashboardPage() {
   const navigate = useNavigate();
   const [filters, setFilters] = useState(DEFAULT_REPORT_FILTERS);
   const [mapMode, setMapMode] = useState("both");
+  const [layerMode, setLayerMode] = useState("reports");
   const [tab, setTab] = useState("new");
+  const [enabledResourceGroups, setEnabledResourceGroups] = useState(RESOURCE_GROUP_ORDER);
 
   const {
     reports,
@@ -56,12 +67,31 @@ export default function DashboardPage() {
     refresh,
     loading,
   } = useReports({ filters });
+  const {
+    markers: resourceMarkers,
+    groupCounts: resourceGroupCounts,
+    loadingGroups: resourceLoadingGroups,
+    errorGroups: resourceErrorGroups,
+    totalEnabledCount: totalResourceCount,
+  } = useHeatReliefResources(enabledResourceGroups);
   const ago = useTickingAgo(lastUpdatedAt, { compact: true });
   const hasFilters = hasActiveReportFilters(filters, { includeStatus: false });
 
   const updateFilter = (patch) => {
     setFilters((current) => ({ ...current, ...patch }));
   };
+
+  const toggleResourceGroup = (group) => {
+    setEnabledResourceGroups((current) => (
+      current.includes(group)
+        ? current.filter((entry) => entry !== group)
+        : [...current, group]
+    ));
+  };
+
+  const showReports = layerMode !== "resources";
+  const showResourceControls = layerMode !== "reports";
+  const showResources = showResourceControls && enabledResourceGroups.length > 0;
 
   const mapReports = reports;
   const categoryCounts = useMemo(() => {
@@ -73,7 +103,7 @@ export default function DashboardPage() {
   }, [allReports, filters]);
 
   const legendCounts = useMemo(() => {
-    const acc = { people: 0, animal: 0, env: 0, vector: 0 };
+    const acc = { people: 0, animal: 0, env: 0 };
     mapReports.forEach((r) => {
       if (acc[r.categorySlug] !== undefined) acc[r.categorySlug] += 1;
     });
@@ -170,7 +200,9 @@ export default function DashboardPage() {
             <div>
               <div className="map-card-title">Reports map</div>
               <div className="map-card-subtitle">
-                Switch between exact report locations and overall density.
+                {layerMode === "resources"
+                  ? "Heat-relief sites for response planning without report clutter."
+                  : "Switch between exact report locations and overall density."}
               </div>
             </div>
             <div className="map-card-controls">
@@ -185,32 +217,68 @@ export default function DashboardPage() {
                   </button>
                 ))}
               </div>
-              <div className="range-tabs" aria-label="Dashboard map view mode">
-                {MAP_VIEW_MODES.map((mode) => (
+              <div className="range-tabs" aria-label="Dashboard map layer focus">
+                {MAP_LAYER_MODES.map((mode) => (
                   <button
                     key={mode.id}
-                    className={`range-tab ${mapMode === mode.id ? "is-active" : ""}`}
-                    onClick={() => setMapMode(mode.id)}
+                    className={`range-tab ${layerMode === mode.id ? "is-active" : ""}`}
+                    onClick={() => setLayerMode(mode.id)}
                   >
                     {mode.label}
                   </button>
                 ))}
               </div>
+              {showReports && (
+                <div className="range-tabs" aria-label="Dashboard map view mode">
+                  {MAP_VIEW_MODES.map((mode) => (
+                    <button
+                      key={mode.id}
+                      className={`range-tab ${mapMode === mode.id ? "is-active" : ""}`}
+                      onClick={() => setMapMode(mode.id)}
+                    >
+                      {mode.label}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
-          <ReportsMap reports={mapReports} height={280} viewMode={mapMode} />
-          <div className="map-mode-note">{getMapModeDescription(mapMode)}</div>
-          <div className="map-legend">
-            {LEGEND_DEFS.map((l) => {
-              const count = legendCounts[l.key] || 0;
-              return (
-                <span key={l.label} className="map-legend-item">
-                  <span className="map-legend-dot" style={{ background: l.color }} />
-                  {l.label} · {count}
-                </span>
-              );
-            })}
+          <ReportsMap
+            reports={mapReports}
+            resourceMarkers={resourceMarkers}
+            showReports={showReports}
+            showResources={showResources}
+            height={280}
+            viewMode={mapMode}
+          />
+          <div className="map-mode-note">
+            {showReports ? getMapModeDescription(mapMode) : getMapLayerDescription(layerMode)}
           </div>
+          {showResourceControls && (
+            <ResourceGroupToggles
+              compact
+              focusMode={layerMode === "resources"}
+              enabledGroups={enabledResourceGroups}
+              onToggleGroup={toggleResourceGroup}
+              groupCounts={resourceGroupCounts}
+              loadingGroups={resourceLoadingGroups}
+              errorGroups={resourceErrorGroups}
+              totalEnabledCount={totalResourceCount}
+            />
+          )}
+          {showReports && (
+            <div className="map-legend">
+              {LEGEND_DEFS.map((l) => {
+                const count = legendCounts[l.key] || 0;
+                return (
+                  <span key={l.label} className="map-legend-item">
+                    <span className="map-legend-dot" style={{ background: l.color }} />
+                    {l.label} · {count}
+                  </span>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         <div className="card cluster-card">
@@ -255,6 +323,18 @@ export default function DashboardPage() {
             </>
           )}
         </div>
+      </div>
+
+      <div className="console-grid-2 analytics-grid">
+        <DashboardTrendChart
+          reports={reports}
+          range={filters.range}
+        />
+        <DashboardCategoryChart reports={reports} />
+      </div>
+
+      <div className="analytics-grid">
+        <DashboardSignalsChart reports={reports} />
       </div>
 
       <div className="card queue-card">

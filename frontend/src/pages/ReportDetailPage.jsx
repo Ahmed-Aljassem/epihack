@@ -2,8 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import {
-  Search, Check, ArrowUpRight, Paperclip, MapPin, ChevronDown, UserPlus,
+  Search, Check, ArrowUpRight, Paperclip, ChevronDown, UserPlus,
 } from "lucide-react";
+import DetailLocationMap from "../components/console/DetailLocationMap";
 import {
   useReport, updateStatus, addNote, reassign,
 } from "../hooks/useReports";
@@ -121,6 +122,7 @@ export default function ReportDetailPage() {
 
   const subtitle = [
     report.category,
+    report.sourceType === "vector" ? "vector-linked" : null,
     report.subcategory,
     report.location?.zip && report.location.zip !== "—" ? report.location.zip : null,
     report.location?.county,
@@ -228,26 +230,7 @@ export default function ReportDetailPage() {
                 </div>
               </div>
             )}
-            <div className="attach-tile">
-              <div className="attach-thumb attach-thumb--map">
-                <span
-                  className="map-dot map-dot--lg"
-                  style={{ top: "44%", left: "48%", background: "#3b82f6", opacity: 0.9 }}
-                />
-              </div>
-              <div className="attach-foot">
-                <span>
-                  <MapPin size={12} /> {report.location?.coords || "—"} · ZIP {report.location?.zip || "—"}
-                </span>
-                <a
-                  href={`https://www.google.com/maps?q=${report.latitude},${report.longitude}`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Open in Maps
-                </a>
-              </div>
-            </div>
+            <DetailLocationMap report={report} />
           </div>
         </div>
 
