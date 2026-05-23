@@ -24,7 +24,7 @@ This repository implements a One Health epidemiology stack that maps signals acr
 Each report is modeled as a composite JSON payload with dedicated sub-reports and optional binary image streams.
 Images are streamed concurrently via multipart/form-data and persisted to AWS S3, while the validated survey document is injected into DynamoDB.
 
-+---------------------------+
+               +---------------------------+
                |  Mobile App (Expo/TS)     |
                |  Desktop Web (React/Vite) |
                +-------------+-------------+
