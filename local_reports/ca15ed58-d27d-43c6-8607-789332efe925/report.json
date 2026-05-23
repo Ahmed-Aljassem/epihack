@@ -1,0 +1,17 @@
+{
+  "event_id": "123e4567-e89b-12d3-a456-426614174000",
+  "lat": 32.2226,
+  "long": -110.9747,
+  "report": [
+    {
+      "type": "human",
+      "sick_flag": 1,
+      "symptoms": [
+        "fever",
+        "cough"
+      ],
+      "death_flag": 0
+    }
+  ],
+  "report_id": "ca15ed58-d27d-43c6-8607-789332efe925"
+}
