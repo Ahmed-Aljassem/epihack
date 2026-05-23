@@ -42,8 +42,8 @@ Images are streamed concurrently via multipart/form-data and persisted to AWS S3
      (Binary Image Streams)       (Validated Metadata JSON)
               v                             v
 +---------------------------+ +---------------------------+
-|      Amazon S3 Bucket     | |     Amazon DynamoDB      |
-|    (Image Asset Hosting)  | |   (NoSQL Document Store) |
+|      Amazon S3 Bucket     | |     Amazon DynamoDB       |
+|    (Image Asset Hosting)  | |   (NoSQL Document Store)  |
 +---------------------------+ +---------------------------+
 ```
 
